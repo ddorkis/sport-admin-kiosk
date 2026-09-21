@@ -1,0 +1,156 @@
+@import "tailwindcss";
+
+/* 
+ * Risoluzione conflitto Tailwind CSS v4 vs Bootstrap 5:
+ * Tailwind definisce .collapse { visibility: collapse; }, che fa sparire completamente
+ * tutti gli elementi figli quando la navbar o qualsiasi container usa la classe .collapse di Bootstrap!
+ */
+.collapse {
+  visibility: visible !important;
+}
+
+.collapse:not(.show) {
+  display: none !important;
+}
+
+.collapse.show {
+  display: block !important;
+  visibility: visible !important;
+}
+
+@media (min-width: 992px) {
+  .navbar-expand-lg .navbar-collapse {
+    display: flex !important;
+    visibility: visible !important;
+    flex-basis: auto !important;
+  }
+}
+
+/* Stili dedicati per la navigazione e i link della navbar */
+.navbar-dark .navbar-nav .nav-link {
+  color: rgba(255, 255, 255, 0.85) !important;
+  font-size: 0.95rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  transition: all 0.15s ease-in-out;
+}
+
+.navbar-dark .navbar-nav .nav-link:hover {
+  color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.navbar-dark .navbar-nav .nav-link.active {
+  color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.22);
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.transition-all {
+  transition: all 0.2s ease-in-out;
+}
+
+.transition-all:hover {
+  transform: translateY(-2px);
+}
+
+/* 
+ * Layout Sidebar Responsivo:
+ * - PC / Desktop (>= 768px): sempre aperto e fisso/sticky a sinistra a tutta altezza
+ * - Schermi compatti e Mobile (< 768px): chiuso di default, a scomparsa con slide laterale al clic dell'hamburger
+ */
+.sidebar-container {
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  overflow-y: auto;
+  transition: transform 0.25s ease-in-out;
+}
+
+@media (max-width: 767.98px) {
+  .sidebar-container {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    height: 100vh;
+    transform: translateX(-100%);
+    box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.35);
+  }
+
+  .sidebar-container.mobile-open {
+    transform: translateX(0);
+  }
+}
+
+.hover-nav-item:hover {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+}
+
+/* 
+ * Regole per Stampa Ufficiale (Ricevuta, Domanda Iscrizione, Richiesta Medico) 
+ */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm 15mm;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+  }
+
+  .d-print-none,
+  .sidebar-container,
+  .btn,
+  .modal-header,
+  .modal-footer,
+  .toast-container {
+    display: none !important;
+  }
+
+  .modal {
+    position: static !important;
+    display: block !important;
+    background: transparent !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .modal-dialog {
+    max-width: 100% !important;
+    margin: 0 !important;
+    transform: none !important;
+  }
+
+  .modal-content {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+
+  .modal-body {
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  .printable-document-container {
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  .printable-paper {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    min-height: auto !important;
+  }
+}

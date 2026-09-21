@@ -1,0 +1,6 @@
+{
+  "name": "Gestionale Sportivo - Kiosk & Amministrazione",
+  "description": "Gestionale per società sportive con doppia interfaccia Kiosk e Amministrativa, gestione tesserati minorenni, quote mensili automatiche, pagamenti e codice PHP/MariaDB esportabile.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

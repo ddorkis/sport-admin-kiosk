@@ -1,0 +1,740 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Persona,
+  Tesserato,
+  Gruppo,
+  GruppoTesserato,
+  Quota,
+  Pagamento,
+  Utente,
+  Anno
+} from './types';
+import {
+  getInitialState,
+  saveState,
+  generaQuotePerIscrizione,
+  isQuotaScaduta
+} from './utils/storage';
+
+// Viste Kiosk e Gestionale
+import { KioskView } from './components/kiosk/KioskView';
+import { Sidebar } from './components/common/Sidebar';
+import { DashboardView } from './components/gestionale/DashboardView';
+import { PersoneView } from './components/gestionale/PersoneView';
+import { TesseratiView } from './components/gestionale/TesseratiView';
+import { GruppiView } from './components/gestionale/GruppiView';
+import { QuoteView } from './components/gestionale/QuoteView';
+import { PagamentiView } from './components/gestionale/PagamentiView';
+import { UtentiView } from './components/gestionale/UtentiView';
+import { AssociazioneView } from './components/gestionale/AssociazioneView';
+
+// Modali Operative
+import { NuovaPersonaModal } from './components/modals/NuovaPersonaModal';
+import { NuovoTesseramentoModal } from './components/modals/NuovoTesseramentoModal';
+import { IscrizioneGruppoModal } from './components/modals/IscrizioneGruppoModal';
+import { RegistraPagamentoModal } from './components/modals/RegistraPagamentoModal';
+import { CercaAnagraficaModal } from './components/modals/CercaAnagraficaModal';
+import { GestioneAnnoModal } from './components/modals/GestioneAnnoModal';
+import { CodeExportModal } from './components/code_export/CodeExportModal';
+import { StampaDocumentoModal, TipoDocumentoStampa } from './components/modals/StampaDocumentoModal';
+
+// Auth
+import { LoginPage } from './components/auth/LoginPage';
+
+export default function App() {
+  const [data, setData] = useState(getInitialState);
+  const [currentUser, setCurrentUser] = useState<Utente | null>(data.utenti[0]); // default admin
+  const [currentMode, setCurrentMode] = useState<'kiosk' | 'gestionale'>('gestionale');
+  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [quoteFilter, setQuoteFilter] = useState<string | undefined>(undefined);
+
+  // Modali state
+  const [isNuovaPersonaOpen, setIsNuovaPersonaOpen] = useState(false);
+  const [isTesseramentoOpen, setIsTesseramentoOpen] = useState(false);
+  const [preselectedPersonaForTess, setPreselectedPersonaForTess] = useState<number | undefined>(undefined);
+
+  const [isIscrizioneGruppoOpen, setIsIscrizioneGruppoOpen] = useState(false);
+  const [preselectedTesseratoForGruppo, setPreselectedTesseratoForGruppo] = useState<number | undefined>(undefined);
+
+  const [isPagamentoOpen, setIsPagamentoOpen] = useState(false);
+  const [preselectedTesseratoForPagamento, setPreselectedTesseratoForPagamento] = useState<number | undefined>(undefined);
+  const [preselectedQuotaForPagamento, setPreselectedQuotaForPagamento] = useState<number | undefined>(undefined);
+
+  const [isCercaAnagraficaOpen, setIsCercaAnagraficaOpen] = useState(false);
+  const [isGestioneAnnoOpen, setIsGestioneAnnoOpen] = useState(false);
+  const [isCodeExportOpen, setIsCodeExportOpen] = useState(false);
+
+  // Stampa Documenti Ufficiali
+  const [stampaModal, setStampaModal] = useState<{
+    isOpen: boolean;
+    tipo: TipoDocumentoStampa;
+    persona?: Persona;
+    tesserato?: Tesserato;
+    pagamento?: Pagamento;
+    gruppi?: Gruppo[];
+  }>({
+    isOpen: false,
+    tipo: 'ricevuta'
+  });
+
+  const handlePrintRicevuta = (pag: Pagamento) => {
+    const tess = data.tesserati.find((t) => t.id === pag.tesserato_id);
+    const pers = tess ? data.persone.find((p) => p.id === tess.persona_id) : undefined;
+    setStampaModal({
+      isOpen: true,
+      tipo: 'ricevuta',
+      pagamento: pag,
+      tesserato: tess,
+      persona: pers
+    });
+  };
+
+  const handlePrintDomandaIscrizione = (tessId: number) => {
+    const tess = data.tesserati.find((t) => t.id === tessId);
+    if (!tess) return;
+    const pers = data.persone.find((p) => p.id === tess.persona_id);
+    const grpIds = data.gruppi_tesserati.filter((gt) => gt.tesserato_id === tess.id).map((gt) => gt.gruppo_id);
+    const grps = data.gruppi.filter((g) => grpIds.includes(g.id));
+    setStampaModal({
+      isOpen: true,
+      tipo: 'domanda_iscrizione',
+      tesserato: tess,
+      persona: pers,
+      gruppi: grps
+    });
+  };
+
+  const handlePrintRichiestaCertificato = (tessId: number) => {
+    const tess = data.tesserati.find((t) => t.id === tessId);
+    if (!tess) return;
+    const pers = data.persone.find((p) => p.id === tess.persona_id);
+    const grpIds = data.gruppi_tesserati.filter((gt) => gt.tesserato_id === tess.id).map((gt) => gt.gruppo_id);
+    const grps = data.gruppi.filter((g) => grpIds.includes(g.id));
+    setStampaModal({
+      isOpen: true,
+      tipo: 'richiesta_certificato',
+      tesserato: tess,
+      persona: pers,
+      gruppi: grps
+    });
+  };
+
+  const handlePrintDemoFromAssociazione = (tipo: TipoDocumentoStampa) => {
+    const sampleTess = data.tesserati[0];
+    const samplePers = sampleTess ? data.persone.find((p) => p.id === sampleTess.persona_id) : data.persone[0];
+    const samplePag = data.pagamenti[0];
+    const grpIds = sampleTess ? data.gruppi_tesserati.filter((gt) => gt.tesserato_id === sampleTess.id).map((gt) => gt.gruppo_id) : [];
+    const grps = data.gruppi.filter((g) => grpIds.includes(g.id));
+
+    setStampaModal({
+      isOpen: true,
+      tipo,
+      tesserato: sampleTess,
+      persona: samplePers,
+      pagamento: samplePag,
+      gruppi: grps.length > 0 ? grps : [data.gruppi[0]]
+    });
+  };
+
+  // Toast feedback
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  // Salva nello storage quando cambia il dato
+  useEffect(() => {
+    saveState(data);
+  }, [data]);
+
+  const annoAttivo = data.anni.find((a) => a.attivo) || data.anni[0];
+  const quoteScaduteCount = data.quote.filter(isQuotaScaduta).length;
+
+  // Login Handler con verifica flag is_kiosk
+  const handleLogin = (user: Utente) => {
+    setCurrentUser(user);
+    if (user.is_kiosk) {
+      setCurrentMode('kiosk');
+      showToast(`Accesso effettuato: Modalità KIOSK attivata per ${user.nome}!`);
+    } else {
+      setCurrentMode('gestionale');
+      setActiveTab('dashboard');
+      showToast(`Benvenuto nel Gestionale Amministrativo, ${user.nome}!`);
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+  };
+
+  // Cambio Anno Sportivo Attivo
+  const handleSelectAnno = (annoId: number) => {
+    setData((prev) => {
+      const updatedAnni = prev.anni.map((a) => ({
+        ...a,
+        attivo: a.id === annoId
+      }));
+      const nuovoAttivo = updatedAnni.find((a) => a.id === annoId);
+      showToast(`Anno sportivo di lavoro impostato su ${nuovoAttivo?.anno}`);
+      return {
+        ...prev,
+        anni: updatedAnni
+      };
+    });
+  };
+
+  // Creazione Nuovo Anno Sportivo
+  const handleCreateAnno = (newAnnoData: Omit<Anno, 'id'>) => {
+    const nextId = Math.max(0, ...data.anni.map((a) => a.id)) + 1;
+    const newAnno: Anno = {
+      ...newAnnoData,
+      id: nextId
+    };
+
+    setData((prev) => {
+      let updatedAnni = [...prev.anni];
+      if (newAnno.attivo) {
+        updatedAnni = updatedAnni.map((a) => ({ ...a, attivo: false }));
+      }
+      return {
+        ...prev,
+        anni: [...updatedAnni, newAnno]
+      };
+    });
+
+    showToast(`Nuovo anno sportivo ${newAnno.anno} creato con successo!`);
+  };
+
+  // Gestione Creazione Persona (con o senza tutore)
+  const handleSavePersona = (newPersonaData: Omit<Persona, 'id' | 'data_creazione'>): Persona => {
+    const nextId = Math.max(0, ...data.persone.map((p) => p.id)) + 1;
+    const newPersona: Persona = {
+      ...newPersonaData,
+      id: nextId,
+      data_creazione: new Date().toISOString()
+    };
+
+    setData((prev) => ({
+      ...prev,
+      persone: [newPersona, ...prev.persone]
+    }));
+
+    showToast(`Persona ${newPersona.nome} ${newPersona.cognome} registrata con successo!`);
+    return newPersona;
+  };
+
+  // Gestione Tesseramento
+  const handleSaveTesseramento = (tessData: {
+    persona_id: number;
+    anno_id: number;
+    numero_tessera: string;
+    tipo_tesseramento: Tesserato['tipo_tesseramento'];
+    certificato_medico_scadenza: string;
+    gruppo_id?: number | null;
+  }) => {
+    const nextId = Math.max(0, ...data.tesserati.map((t) => t.id)) + 1;
+    const newTess: Tesserato = {
+      id: nextId,
+      persona_id: tessData.persona_id,
+      anno_id: tessData.anno_id,
+      numero_tessera: tessData.numero_tessera,
+      tipo_tesseramento: tessData.tipo_tesseramento,
+      certificato_medico_scadenza: tessData.certificato_medico_scadenza,
+      data_tesseramento: new Date().toISOString().substring(0, 10),
+      stato: 'Attivo'
+    };
+
+    let nuoveQuote: Quota[] = [];
+    let updatedGruppiTess = [...data.gruppi_tesserati];
+
+    if (tessData.gruppo_id) {
+      const gruppo = data.gruppi.find((g) => g.id === tessData.gruppo_id);
+      if (gruppo) {
+        const nextGtId = Math.max(0, ...data.gruppi_tesserati.map((gt) => gt.id)) + 1;
+        updatedGruppiTess.push({
+          id: nextGtId,
+          gruppo_id: gruppo.id,
+          tesserato_id: newTess.id,
+          data_iscrizione: new Date().toISOString().substring(0, 10),
+          note: 'Iscritto durante tesseramento'
+        });
+        nuoveQuote = generaQuotePerIscrizione(gruppo, newTess.id, data.quote);
+      }
+    }
+
+    setData((prev) => ({
+      ...prev,
+      tesserati: [newTess, ...prev.tesserati],
+      gruppi_tesserati: updatedGruppiTess,
+      quote: [...nuoveQuote, ...prev.quote]
+    }));
+
+    showToast(`Tesseramento ${newTess.numero_tessera} registrato con successo!`);
+  };
+
+  // Gestione Iscrizione a Gruppo & Generazione Automatica Quote
+  const handleSaveIscrizioneGruppo = (tesseratoId: number, gruppoId: number) => {
+    const gruppo = data.gruppi.find((g) => g.id === gruppoId);
+    if (!gruppo) return;
+
+    const nextId = Math.max(0, ...data.gruppi_tesserati.map((gt) => gt.id)) + 1;
+    const newGruppoTesserato: GruppoTesserato = {
+      id: nextId,
+      gruppo_id: gruppoId,
+      tesserato_id: tesseratoId,
+      data_iscrizione: new Date().toISOString().substring(0, 10),
+      note: 'Iscritto da interfaccia'
+    };
+
+    // Generazione automatica di tutte le rate mensili previste per il corso
+    const nuoveQuote = generaQuotePerIscrizione(gruppo, tesseratoId, data.quote);
+
+    setData((prev) => ({
+      ...prev,
+      gruppi_tesserati: [newGruppoTesserato, ...prev.gruppi_tesserati],
+      quote: [...nuoveQuote, ...prev.quote]
+    }));
+
+    showToast(`Atleta iscritto a ${gruppo.nome_gruppo} e generate ${nuoveQuote.length} quote mensili!`);
+  };
+
+  // Generazione quote di massa per un gruppo
+  const handleGeneraQuotePerGruppo = (gruppoId: number) => {
+    const gruppo = data.gruppi.find((g) => g.id === gruppoId);
+    if (!gruppo) return;
+
+    const iscritti = data.gruppi_tesserati.filter((gt) => gt.gruppo_id === gruppoId);
+    if (iscritti.length === 0) {
+      alert('Nessun atleta iscritto a questo gruppo. Iscrivi prima gli atleti.');
+      return;
+    }
+
+    let nuoveTotali: Quota[] = [];
+    let currentQuoteList = [...data.quote];
+
+    iscritti.forEach((gt) => {
+      const generated = generaQuotePerIscrizione(gruppo, gt.tesserato_id, currentQuoteList);
+      nuoveTotali = [...nuoveTotali, ...generated];
+      currentQuoteList = [...generated, ...currentQuoteList];
+    });
+
+    if (nuoveTotali.length === 0) {
+      alert('Tutte le quote mensili per gli atleti di questo gruppo risultano già generate!');
+      return;
+    }
+
+    setData((prev) => ({
+      ...prev,
+      quote: [...nuoveTotali, ...prev.quote]
+    }));
+
+    showToast(`Generate con successo ${nuoveTotali.length} nuove quote mensili per ${gruppo.nome_gruppo}!`);
+  };
+
+  // Creazione Nuovo Gruppo
+  const handleCreaNuovoGruppo = (gruppoData: Omit<Gruppo, 'id'>) => {
+    const nextId = Math.max(0, ...data.gruppi.map((g) => g.id)) + 1;
+    const nuovoGruppo: Gruppo = {
+      ...gruppoData,
+      id: nextId
+    };
+
+    setData((prev) => ({
+      ...prev,
+      gruppi: [nuovoGruppo, ...prev.gruppi]
+    }));
+
+    showToast(`Nuovo gruppo ${nuovoGruppo.nome_gruppo} creato!`);
+  };
+
+  // Registrazione Incasso / Saldo Quota
+  const handleSavePagamento = (pagData: {
+    tesserato_id: number;
+    quota_id?: number | null;
+    importo: number;
+    metodo_pagamento: Pagamento['metodo_pagamento'];
+    causale: string;
+    note?: string;
+  }) => {
+    const nextId = Math.max(0, ...data.pagamenti.map((p) => p.id)) + 1;
+    const currentYear = new Date().getFullYear();
+    const ricevutaNumero = `RIC-${currentYear}-${String(nextId).padStart(4, '0')}`;
+    const dateStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
+
+    const newPagamento: Pagamento = {
+      id: nextId,
+      tesserato_id: pagData.tesserato_id,
+      quota_id: pagData.quota_id || null,
+      importo: Number(pagData.importo),
+      data_pagamento: dateStr,
+      metodo_pagamento: pagData.metodo_pagamento,
+      causale: pagData.causale,
+      ricevuta_numero: ricevutaNumero,
+      note: pagData.note || ''
+    };
+
+    // Aggiornamento eventuale quota collegata
+    let updatedQuote = [...data.quote];
+    if (newPagamento.quota_id) {
+      updatedQuote = updatedQuote.map((q) => {
+        if (q.id === newPagamento.quota_id) {
+          const importoPagatoNuovo = (q.importo_pagato || 0) + newPagamento.importo;
+          const nuovoStato: Quota['stato'] =
+            importoPagatoNuovo >= q.importo ? 'pagata' : 'parziale';
+          return {
+            ...q,
+            importo_pagato: importoPagatoNuovo,
+            stato: nuovoStato
+          };
+        }
+        return q;
+      });
+    }
+
+    setData((prev) => ({
+      ...prev,
+      pagamenti: [newPagamento, ...prev.pagamenti],
+      quote: updatedQuote
+    }));
+
+    showToast(`Pagamento di € ${newPagamento.importo.toFixed(2)} registrato (${ricevutaNumero})!`);
+  };
+
+  // Gestione Utenti
+  const handleToggleKioskFlag = (userId: number) => {
+    setData((prev) => ({
+      ...prev,
+      utenti: prev.utenti.map((u) => (u.id === userId ? { ...u, is_kiosk: !u.is_kiosk } : u))
+    }));
+    showToast('Flag modalità Kiosk aggiornato!');
+  };
+
+  const handleCreaUtente = (newUserData: Omit<Utente, 'id'>) => {
+    const nextId = Math.max(0, ...data.utenti.map((u) => u.id)) + 1;
+    const newUser: Utente = {
+      ...newUserData,
+      id: nextId
+    };
+
+    setData((prev) => ({
+      ...prev,
+      utenti: [...prev.utenti, newUser]
+    }));
+
+    showToast(`Utente ${newUser.username} creato con successo!`);
+  };
+
+  // Se nessun utente è autenticato, mostra pagina di Login
+  if (!currentUser) {
+    return (
+      <>
+        <LoginPage
+          utenti={data.utenti}
+          onLogin={handleLogin}
+          onOpenCodeExport={() => setIsCodeExportOpen(true)}
+        />
+        <CodeExportModal
+          isOpen={isCodeExportOpen}
+          onClose={() => setIsCodeExportOpen(false)}
+        />
+      </>
+    );
+  }
+
+  return (
+    <div className="min-vh-100 bg-light d-flex flex-column font-sans">
+      {/* Toast Notifiche */}
+      {toastMessage && (
+        <div
+          className="position-fixed bottom-0 end-0 p-3"
+          style={{ zIndex: 1090 }}
+        >
+          <div className="toast show align-items-center text-white bg-success border-0 shadow-lg rounded-3">
+            <div className="d-flex">
+              <div className="toast-body d-flex align-items-center">
+                <i className="bi bi-check-circle-fill me-2 fs-5"></i>
+                {toastMessage}
+              </div>
+              <button
+                type="button"
+                className="btn-close btn-close-white me-2 m-auto"
+                onClick={() => setToastMessage(null)}
+              ></button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RENDER MODALITÀ KIOSK O GESTIONALE */}
+      {currentMode === 'kiosk' ? (
+        <KioskView
+          user={currentUser}
+          annoAttivo={annoAttivo}
+          persone={data.persone}
+          tesserati={data.tesserati}
+          gruppi={data.gruppi}
+          quote={data.quote}
+          pagamenti={data.pagamenti}
+          onOpenNuovaPersona={() => setIsNuovaPersonaOpen(true)}
+          onOpenTesseramento={() => {
+            setPreselectedPersonaForTess(undefined);
+            setIsTesseramentoOpen(true);
+          }}
+          onOpenIscrizioneGruppo={() => {
+            setPreselectedTesseratoForGruppo(undefined);
+            setIsIscrizioneGruppoOpen(true);
+          }}
+          onOpenPagamento={() => {
+            setPreselectedTesseratoForPagamento(undefined);
+            setPreselectedQuotaForPagamento(undefined);
+            setIsPagamentoOpen(true);
+          }}
+          onOpenCercaAnagrafica={() => setIsCercaAnagraficaOpen(true)}
+          onOpenGestioneAnno={() => setIsGestioneAnnoOpen(true)}
+          onSwitchToGestionale={() => setCurrentMode('gestionale')}
+          onOpenCodeExport={() => setIsCodeExportOpen(true)}
+          onLogout={handleLogout}
+        />
+      ) : (
+        <div className="d-flex flex-column flex-md-row min-vh-100 bg-light">
+          {/* Menu Laterale (sempre aperto su monitor PC / Desktop, compresso con pulsante hamburger su mobile / schermi compatti) */}
+          <Sidebar
+            user={currentUser}
+            annoAttivo={annoAttivo}
+            anni={data.anni}
+            onSelectAnno={handleSelectAnno}
+            onOpenGestioneAnno={() => setIsGestioneAnnoOpen(true)}
+            activeTab={activeTab}
+            onSelectTab={(tab) => {
+              setActiveTab(tab);
+              setQuoteFilter(undefined);
+            }}
+            onSwitchToKiosk={() => setCurrentMode('kiosk')}
+            onOpenCodeExport={() => setIsCodeExportOpen(true)}
+            quoteScaduteCount={quoteScaduteCount}
+            onLogout={handleLogout}
+          />
+
+          {/* Contenuto Gestionale in base alla tab attiva */}
+          <main className="flex-grow-1 overflow-auto" style={{ minWidth: 0 }}>
+            {activeTab === 'dashboard' && (
+              <DashboardView
+                annoAttivo={annoAttivo}
+                persone={data.persone}
+                tesserati={data.tesserati}
+                gruppi={data.gruppi}
+                quote={data.quote}
+                pagamenti={data.pagamenti}
+                onNavigateTab={(tab, filter) => {
+                  setActiveTab(tab);
+                  if (filter) setQuoteFilter(filter);
+                }}
+                onOpenPagamento={(tessId, quotaId) => {
+                  setPreselectedTesseratoForPagamento(tessId);
+                  setPreselectedQuotaForPagamento(quotaId);
+                  setIsPagamentoOpen(true);
+                }}
+                onOpenNuovaPersona={() => setIsNuovaPersonaOpen(true)}
+              />
+            )}
+
+            {activeTab === 'persone' && (
+              <PersoneView
+                persone={data.persone}
+                onOpenNuovaPersona={() => setIsNuovaPersonaOpen(true)}
+                onTesseraPersona={(p) => {
+                  setPreselectedPersonaForTess(p.id);
+                  setIsTesseramentoOpen(true);
+                }}
+              />
+            )}
+
+            {activeTab === 'tesserati' && (
+              <TesseratiView
+                persone={data.persone}
+                tesserati={data.tesserati}
+                anni={data.anni}
+                gruppi={data.gruppi}
+                gruppiTesserati={data.gruppi_tesserati}
+                quote={data.quote}
+                onOpenNuovoTesseramento={() => {
+                  setPreselectedPersonaForTess(undefined);
+                  setIsTesseramentoOpen(true);
+                }}
+                onOpenIscrizioneGruppo={(tessId) => {
+                  setPreselectedTesseratoForGruppo(tessId);
+                  setIsIscrizioneGruppoOpen(true);
+                }}
+                onOpenPagamento={(tessId) => {
+                  setPreselectedTesseratoForPagamento(tessId);
+                  setPreselectedQuotaForPagamento(undefined);
+                  setIsPagamentoOpen(true);
+                }}
+                onViewQuotes={(tessId) => {
+                  setActiveTab('quote');
+                }}
+                onPrintDomandaIscrizione={handlePrintDomandaIscrizione}
+                onPrintRichiestaCertificato={handlePrintRichiestaCertificato}
+              />
+            )}
+
+            {activeTab === 'gruppi' && (
+              <GruppiView
+                gruppi={data.gruppi}
+                gruppiTesserati={data.gruppi_tesserati}
+                tesserati={data.tesserati}
+                persone={data.persone}
+                anni={data.anni}
+                quote={data.quote}
+                onGeneraQuotePerGruppo={handleGeneraQuotePerGruppo}
+                onCreaNuovoGruppo={handleCreaNuovoGruppo}
+                onOpenIscrizioneGruppo={() => setIsIscrizioneGruppoOpen(true)}
+              />
+            )}
+
+            {activeTab === 'quote' && (
+              <QuoteView
+                quote={data.quote}
+                tesserati={data.tesserati}
+                persone={data.persone}
+                gruppi={data.gruppi}
+                initialFilter={quoteFilter}
+                onOpenPagamento={(tessId, quotaId) => {
+                  setPreselectedTesseratoForPagamento(tessId);
+                  setPreselectedQuotaForPagamento(quotaId);
+                  setIsPagamentoOpen(true);
+                }}
+              />
+            )}
+
+            {activeTab === 'pagamenti' && (
+              <PagamentiView
+                pagamenti={data.pagamenti}
+                tesserati={data.tesserati}
+                persone={data.persone}
+                quote={data.quote}
+                associazione={data.associazione}
+                onOpenNuovoPagamento={() => {
+                  setPreselectedTesseratoForPagamento(undefined);
+                  setPreselectedQuotaForPagamento(undefined);
+                  setIsPagamentoOpen(true);
+                }}
+                onOpenStampaUfficiale={handlePrintRicevuta}
+              />
+            )}
+
+            {activeTab === 'utenti' && (
+              <UtentiView
+                utenti={data.utenti}
+                currentUser={currentUser}
+                onToggleKioskFlag={handleToggleKioskFlag}
+                onCreaUtente={handleCreaUtente}
+                onSwitchUser={(u) => handleLogin(u)}
+              />
+            )}
+
+            {activeTab === 'associazione' && (
+              <AssociazioneView
+                associazione={data.associazione}
+                onSaveAssociazione={(updated) => {
+                  setData((prev) => ({ ...prev, associazione: updated }));
+                  showToast('Dati dell\'Associazione aggiornati con successo!');
+                }}
+                onOpenStampaDemo={handlePrintDemoFromAssociazione}
+              />
+            )}
+          </main>
+        </div>
+      )}
+
+      {/* MODALI CONDIVISI */}
+      <NuovaPersonaModal
+        isOpen={isNuovaPersonaOpen}
+        onClose={() => setIsNuovaPersonaOpen(false)}
+        onSave={handleSavePersona}
+        isKioskMode={currentMode === 'kiosk'}
+      />
+
+      <NuovoTesseramentoModal
+        isOpen={isTesseramentoOpen}
+        onClose={() => setIsTesseramentoOpen(false)}
+        persone={data.persone}
+        tesseratiEsistenti={data.tesserati}
+        gruppi={data.gruppi}
+        anni={data.anni}
+        preselectedPersonaId={preselectedPersonaForTess}
+        onSave={handleSaveTesseramento}
+        isKioskMode={currentMode === 'kiosk'}
+      />
+
+      <IscrizioneGruppoModal
+        isOpen={isIscrizioneGruppoOpen}
+        onClose={() => setIsIscrizioneGruppoOpen(false)}
+        tesserati={data.tesserati}
+        persone={data.persone}
+        gruppi={data.gruppi}
+        preselectedTesseratoId={preselectedTesseratoForGruppo}
+        onSave={handleSaveIscrizioneGruppo}
+        isKioskMode={currentMode === 'kiosk'}
+      />
+
+      <RegistraPagamentoModal
+        isOpen={isPagamentoOpen}
+        onClose={() => setIsPagamentoOpen(false)}
+        tesserati={data.tesserati}
+        persone={data.persone}
+        quote={data.quote}
+        preselectedTesseratoId={preselectedTesseratoForPagamento}
+        preselectedQuotaId={preselectedQuotaForPagamento}
+        onSave={handleSavePagamento}
+        isKioskMode={currentMode === 'kiosk'}
+      />
+
+      <CercaAnagraficaModal
+        isOpen={isCercaAnagraficaOpen}
+        onClose={() => setIsCercaAnagraficaOpen(false)}
+        persone={data.persone}
+        tesserati={data.tesserati}
+        gruppi={data.gruppi}
+        gruppiTesserati={data.gruppi_tesserati}
+        quote={data.quote}
+        pagamenti={data.pagamenti}
+        onOpenPagamento={(tessId, quotaId) => {
+          setPreselectedTesseratoForPagamento(tessId);
+          setPreselectedQuotaForPagamento(quotaId);
+          setIsPagamentoOpen(true);
+        }}
+        isKioskMode={currentMode === 'kiosk'}
+      />
+
+      <GestioneAnnoModal
+        isOpen={isGestioneAnnoOpen}
+        onClose={() => setIsGestioneAnnoOpen(false)}
+        anni={data.anni}
+        annoAttivo={annoAttivo}
+        onSelectAnno={handleSelectAnno}
+        onCreateAnno={handleCreateAnno}
+        isKioskMode={currentMode === 'kiosk'}
+      />
+
+      <CodeExportModal
+        isOpen={isCodeExportOpen}
+        onClose={() => setIsCodeExportOpen(false)}
+      />
+
+      <StampaDocumentoModal
+        isOpen={stampaModal.isOpen}
+        onClose={() => setStampaModal((prev) => ({ ...prev, isOpen: false }))}
+        tipoDocumento={stampaModal.tipo}
+        associazione={data.associazione}
+        persona={stampaModal.persona}
+        tesserato={stampaModal.tesserato}
+        pagamento={stampaModal.pagamento}
+        annoAttivo={annoAttivo}
+        gruppi={stampaModal.gruppi}
+      />
+    </div>
+  );
+}
