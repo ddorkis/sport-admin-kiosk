@@ -5,12 +5,14 @@ interface Props {
   persone: Persona[];
   onOpenNuovaPersona: () => void;
   onTesseraPersona: (persona: Persona) => void;
+  onModificaPersona: (persona: Persona) => void;
 }
 
 export const PersoneView: React.FC<Props> = ({
   persone,
   onOpenNuovaPersona,
-  onTesseraPersona
+  onTesseraPersona,
+  onModificaPersona
 }) => {
   const [search, setSearch] = useState('');
   const [filterMinori, setFilterMinori] = useState<'all' | 'minori' | 'maggiori'>('all');
@@ -192,14 +194,25 @@ export const PersoneView: React.FC<Props> = ({
                           {p.email && <div><i className="bi bi-envelope me-1"></i>{p.email}</div>}
                         </div>
                       </td>
-                      <td className="text-end">
-                        <button
-                          className="btn btn-sm btn-outline-success fw-bold"
-                          title="Tessera questo atleta"
-                          onClick={() => onTesseraPersona(p)}
-                        >
-                          <i className="bi bi-card-checklist me-1"></i> Tessera
-                        </button>
+                      <td className="text-end text-nowrap">
+                        <div className="btn-group btn-group-sm" role="group">
+                          <button
+                            type="button"
+                            className="btn btn-outline-primary"
+                            title="Modifica anagrafica, recapiti e tutore"
+                            onClick={() => onModificaPersona(p)}
+                          >
+                            <i className="bi bi-pencil-square me-1"></i> Modifica
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-outline-success fw-semibold"
+                            title="Tessera questo atleta"
+                            onClick={() => onTesseraPersona(p)}
+                          >
+                            <i className="bi bi-card-checklist me-1"></i> Tessera
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

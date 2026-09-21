@@ -9,8 +9,9 @@ interface Props {
   anni: Anno[];
   quote: Quota[];
   onGeneraQuotePerGruppo: (gruppoId: number) => void;
-  onCreaNuovoGruppo: (gruppo: Omit<Gruppo, 'id'>) => void;
+  onOpenNuovoGruppo: () => void;
   onOpenIscrizioneGruppo: () => void;
+  onOpenDisiscrizione?: (tesseratoId: number) => void;
 }
 
 export const GruppiView: React.FC<Props> = ({
@@ -21,47 +22,13 @@ export const GruppiView: React.FC<Props> = ({
   anni,
   quote,
   onGeneraQuotePerGruppo,
-  onCreaNuovoGruppo,
-  onOpenIscrizioneGruppo
+  onOpenNuovoGruppo,
+  onOpenIscrizioneGruppo,
+  onOpenDisiscrizione
 }) => {
   const [selectedGruppoForView, setSelectedGruppoForView] = useState<Gruppo | null>(null);
-  const [isCreatingGruppo, setIsCreatingGruppo] = useState(false);
 
-  // Form nuovo gruppo
   const annoAttivo = anni.find((a) => a.attivo) || anni[0];
-  const [nomeGruppo, setNomeGruppo] = useState('');
-  const [categoria, setCategoria] = useState('');
-  const [quotaMensile, setQuotaMensile] = useState('50.00');
-  const [giornoScadenza, setGiornoScadenza] = useState('10');
-  const [dataInizio, setDataInizio] = useState('2024-09-01');
-  const [dataFine, setDataFine] = useState('2025-05-31');
-  const [istruttore, setIstruttore] = useState('');
-  const [descrizione, setDescrizione] = useState('');
-
-  const handleCreateSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!nomeGruppo.trim()) {
-      alert('Inserisci il nome del gruppo.');
-      return;
-    }
-
-    onCreaNuovoGruppo({
-      anno_id: annoAttivo?.id || 1,
-      nome_gruppo: nomeGruppo.trim(),
-      categoria: categoria.trim() || 'Generale',
-      quota_mensile: parseFloat(quotaMensile) || 50,
-      giorno_scadenza_mensile: parseInt(giornoScadenza) || 10,
-      data_inizio: dataInizio,
-      data_fine: dataFine,
-      istruttore: istruttore.trim(),
-      descrizione: descrizione.trim()
-    });
-
-    setIsCreatingGruppo(false);
-    setNomeGruppo('');
-    setDescrizione('');
-    setIstruttore('');
-  };
 
   return (
     <div className="container-fluid py-4">
@@ -78,7 +45,7 @@ export const GruppiView: React.FC<Props> = ({
           <button className="btn btn-outline-primary" onClick={onOpenIscrizioneGruppo}>
             <i className="bi bi-person-plus me-1"></i> Iscrivi Atleta a Gruppo
           </button>
-          <button className="btn btn-primary fw-bold" onClick={() => setIsCreatingGruppo(true)}>
+          <button className="btn btn-primary fw-bold" onClick={onOpenNuovoGruppo}>
             <i className="bi bi-plus-lg me-1"></i> Crea Nuovo Gruppo
           </button>
         </div>
@@ -194,6 +161,7 @@ export const GruppiView: React.FC<Props> = ({
                           <th>Nominativo</th>
                           <th>Data Iscrizione</th>
                           <th>Minorenne / Tutore</th>
+                          <th className="text-end">Azioni</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -216,6 +184,21 @@ export const GruppiView: React.FC<Props> = ({
                                     <span className="badge bg-secondary">Maggiorenne</span>
                                   )}
                                 </td>
+                                <td className="text-end">
+                                  {onOpenDisiscrizione && tess && (
+                                    <button
+                                      type="button"
+                                      className="btn btn-sm btn-outline-danger"
+                                      title="Disiscrivi atleta dal corso e gestisci quote future"
+                                      onClick={() => {
+                                        setSelectedGruppoForView(null);
+                                        onOpenDisiscrizione(tess.id);
+                                      }}
+                                    >
+                                      <i className="bi bi-person-x me-1"></i> Disiscrivi
+                                    </button>
+                                  )}
+                                </td>
                               </tr>
                             );
                           })}
@@ -229,128 +212,6 @@ export const GruppiView: React.FC<Props> = ({
                   Chiudi
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Creazione Nuovo Gruppo */}
-      {isCreatingGruppo && (
-        <div className="modal show d-block bg-dark bg-opacity-75" tabIndex={-1} style={{ zIndex: 1055 }}>
-          <div className="modal-dialog modal-dialog-centered modal-lg">
-            <div className="modal-content border-0 rounded-4 shadow-lg">
-              <form onSubmit={handleCreateSubmit}>
-                <div className="modal-header bg-primary text-white">
-                  <h5 className="modal-title fw-bold">
-                    <i className="bi bi-diagram-3-fill me-2"></i> Creazione Nuovo Gruppo / Corso Annuale
-                  </h5>
-                  <button type="button" className="btn-close btn-close-white" onClick={() => setIsCreatingGruppo(false)}></button>
-                </div>
-                <div className="modal-body p-4">
-                  <div className="row g-3">
-                    <div className="col-md-6">
-                      <label className="form-label fw-semibold">Nome del Gruppo / Corso *</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="Es. Basket Under 16, Judo Kids, Nuoto Master"
-                        value={nomeGruppo}
-                        onChange={(e) => setNomeGruppo(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="col-md-6">
-                      <label className="form-label fw-semibold">Categoria / Disciplina</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="Es. Pallacanestro, Calcio a 5, Ginnastica"
-                        value={categoria}
-                        onChange={(e) => setCategoria(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="col-md-4">
-                      <label className="form-label fw-semibold">Quota Mensile (€) *</label>
-                      <input
-                        type="number"
-                        step="1"
-                        className="form-control"
-                        value={quotaMensile}
-                        onChange={(e) => setQuotaMensile(e.target.value)}
-                        required
-                      />
-                      <div className="form-text">Costo mensile addebitato a ciascun atleta</div>
-                    </div>
-
-                    <div className="col-md-4">
-                      <label className="form-label fw-semibold">Giorno Scadenza del Mese *</label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="31"
-                        className="form-control"
-                        value={giornoScadenza}
-                        onChange={(e) => setGiornoScadenza(e.target.value)}
-                        required
-                      />
-                      <div className="form-text">Es. 10 = scadenza il 10 di ogni mese</div>
-                    </div>
-
-                    <div className="col-md-4">
-                      <label className="form-label fw-semibold">Istruttore</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="Nome Coach"
-                        value={istruttore}
-                        onChange={(e) => setIstruttore(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="col-md-6">
-                      <label className="form-label fw-semibold">Data Inizio Corso *</label>
-                      <input
-                        type="date"
-                        className="form-control"
-                        value={dataInizio}
-                        onChange={(e) => setDataInizio(e.target.value)}
-                        required
-                      />
-                    </div>
-
-                    <div className="col-md-6">
-                      <label className="form-label fw-semibold">Data Fine Corso *</label>
-                      <input
-                        type="date"
-                        className="form-control"
-                        value={dataFine}
-                        onChange={(e) => setDataFine(e.target.value)}
-                        required
-                      />
-                    </div>
-
-                    <div className="col-12">
-                      <label className="form-label fw-semibold">Descrizione & Orari</label>
-                      <textarea
-                        className="form-control"
-                        rows={2}
-                        placeholder="Orari di allenamento, sede, dettagli..."
-                        value={descrizione}
-                        onChange={(e) => setDescrizione(e.target.value)}
-                      ></textarea>
-                    </div>
-                  </div>
-                </div>
-                <div className="modal-footer bg-light">
-                  <button type="button" className="btn btn-secondary" onClick={() => setIsCreatingGruppo(false)}>
-                    Annulla
-                  </button>
-                  <button type="submit" className="btn btn-primary fw-bold">
-                    Salva Gruppo
-                  </button>
-                </div>
-              </form>
             </div>
           </div>
         </div>

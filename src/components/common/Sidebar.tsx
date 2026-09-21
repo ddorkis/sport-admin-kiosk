@@ -255,7 +255,13 @@ export const Sidebar: React.FC<Props> = ({
           </div>
           <ul className="nav flex-column gap-1">
             {navItems.map((item) => {
-              const isActive = activeTab === item.id;
+              const isActive =
+                activeTab === item.id ||
+                (item.id === 'persone' && activeTab === 'nuova_persona') ||
+                (item.id === 'tesserati' && activeTab === 'nuovo_tesseramento') ||
+                (item.id === 'gruppi' && (activeTab === 'nuovo_gruppo' || activeTab === 'iscrizione_gruppo')) ||
+                (item.id === 'pagamenti' && activeTab === 'nuovo_pagamento') ||
+                (item.id === 'utenti' && activeTab === 'nuovo_utente');
               return (
                 <li className="nav-item" key={item.id}>
                   <button

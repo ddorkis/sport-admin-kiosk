@@ -9,6 +9,7 @@ interface Props {
   gruppi: Gruppo[];
   initialFilter?: string;
   onOpenPagamento: (tesseratoId: number, quotaId: number) => void;
+  onAnnullaQuota?: (quota: Quota) => void;
 }
 
 export const QuoteView: React.FC<Props> = ({
@@ -17,7 +18,8 @@ export const QuoteView: React.FC<Props> = ({
   persone,
   gruppi,
   initialFilter,
-  onOpenPagamento
+  onOpenPagamento,
+  onAnnullaQuota
 }) => {
   const [soloScadute, setSoloScadute] = useState<boolean>(initialFilter === 'scadute');
   const [search, setSearch] = useState('');
@@ -142,6 +144,7 @@ export const QuoteView: React.FC<Props> = ({
                 <option value="da_pagare">Da Pagare (Aperte)</option>
                 <option value="parziale">Pagamento Parziale</option>
                 <option value="pagata">Saldate / Pagate</option>
+                <option value="annullata">Annullate / Sgravate</option>
               </select>
             </div>
 
@@ -205,15 +208,30 @@ export const QuoteView: React.FC<Props> = ({
                   const giorniRitardo = getGiorniRitardo(q.data_scadenza);
                   const residuo = q.importo - (q.importo_pagato || 0);
 
+                  const isAnnullata = q.stato === 'annullata';
+
                   return (
-                    <tr key={q.id} className={isScaduta ? 'table-danger bg-opacity-25' : ''}>
+                    <tr
+                      key={q.id}
+                      className={
+                        isAnnullata
+                          ? 'table-light text-muted opacity-75'
+                          : isScaduta
+                          ? 'table-danger bg-opacity-25'
+                          : ''
+                      }
+                    >
                       <td>
-                        <strong className={isScaduta ? 'text-danger' : 'text-dark'}>
+                        <strong className={isAnnullata ? 'text-muted text-decoration-line-through' : isScaduta ? 'text-danger' : 'text-dark'}>
                           {q.data_scadenza}
                         </strong>
                       </td>
                       <td>
-                        {isScaduta ? (
+                        {isAnnullata ? (
+                          <span className="badge bg-secondary-subtle text-secondary border">
+                            <i className="bi bi-x-circle me-1"></i> Annullata
+                          </span>
+                        ) : isScaduta ? (
                           <span className="badge bg-danger">
                             <i className="bi bi-clock-history me-1"></i>
                             Scaduta da {giorniRitardo} gg!
@@ -241,28 +259,55 @@ export const QuoteView: React.FC<Props> = ({
                         <span className="small text-muted">{gruppo?.nome_gruppo || 'Quota Libera'}</span>
                       </td>
                       <td>
-                        <span className="small fw-semibold">{q.causale}</span>
+                        <div className={`small fw-semibold ${isAnnullata ? 'text-decoration-line-through text-muted' : ''}`}>
+                          {q.causale}
+                        </div>
+                        {q.note && (
+                          <div className="small text-secondary fst-italic" style={{ fontSize: '0.78rem' }}>
+                            <i className="bi bi-chat-left-text me-1"></i>
+                            {q.note}
+                          </div>
+                        )}
                       </td>
                       <td>
-                        <span>€ {q.importo.toFixed(2)}</span>
+                        <span className={isAnnullata ? 'text-decoration-line-through text-muted' : ''}>
+                          € {q.importo.toFixed(2)}
+                        </span>
                       </td>
                       <td>
                         <span className="text-success">€ {(q.importo_pagato || 0).toFixed(2)}</span>
                       </td>
                       <td>
-                        <strong className={residuo > 0 ? (isScaduta ? 'text-danger fs-6' : 'text-primary') : 'text-muted'}>
-                          € {residuo.toFixed(2)}
-                        </strong>
+                        {isAnnullata ? (
+                          <span className="badge bg-light text-muted border">€ 0.00 (Sgravata)</span>
+                        ) : (
+                          <strong className={residuo > 0 ? (isScaduta ? 'text-danger fs-6' : 'text-primary') : 'text-muted'}>
+                            € {residuo.toFixed(2)}
+                          </strong>
+                        )}
                       </td>
                       <td className="text-end">
-                        {residuo > 0 ? (
-                          <button
-                            className="btn btn-sm btn-success fw-bold"
-                            onClick={() => onOpenPagamento(q.tesserato_id, q.id)}
-                            title="Registra incasso per questa quota"
-                          >
-                            <i className="bi bi-cash me-1"></i> Salda
-                          </button>
+                        {isAnnullata ? (
+                          <span className="badge bg-light text-muted border">Annullata</span>
+                        ) : residuo > 0 ? (
+                          <div className="btn-group btn-group-sm">
+                            <button
+                              className="btn btn-sm btn-success fw-bold"
+                              onClick={() => onOpenPagamento(q.tesserato_id, q.id)}
+                              title="Registra incasso per questa quota"
+                            >
+                              <i className="bi bi-cash me-1"></i> Salda
+                            </button>
+                            {onAnnullaQuota && (
+                              <button
+                                className="btn btn-sm btn-outline-danger"
+                                onClick={() => onAnnullaQuota(q)}
+                                title="Annulla o sgravi questa quota (es. per ritiro)"
+                              >
+                                <i className="bi bi-x-circle"></i>
+                              </button>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-muted small">
                             <i className="bi bi-check-all text-success fs-5"></i>

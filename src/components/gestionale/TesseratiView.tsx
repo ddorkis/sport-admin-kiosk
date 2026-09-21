@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Persona, Tesserato, Anno, Gruppo, GruppoTesserato, Quota } from '../../types';
 
 interface Props {
@@ -12,6 +12,8 @@ interface Props {
   onOpenIscrizioneGruppo: (tesseratoId: number) => void;
   onOpenPagamento: (tesseratoId: number) => void;
   onViewQuotes: (tesseratoId: number) => void;
+  onModificaPersona?: (persona: Persona) => void;
+  onOpenDisiscrizione?: (tesseratoId: number) => void;
   onPrintDomandaIscrizione?: (tesseratoId: number) => void;
   onPrintRichiestaCertificato?: (tesseratoId: number) => void;
 }
@@ -27,6 +29,8 @@ export const TesseratiView: React.FC<Props> = ({
   onOpenIscrizioneGruppo,
   onOpenPagamento,
   onViewQuotes,
+  onModificaPersona,
+  onOpenDisiscrizione,
   onPrintDomandaIscrizione,
   onPrintRichiestaCertificato
 }) => {
@@ -34,7 +38,29 @@ export const TesseratiView: React.FC<Props> = ({
   const [selectedAnnoId, setSelectedAnnoId] = useState<number>(annoAttivo?.id || 1);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [openMenuTesseratoId, setOpenMenuTesseratoId] = useState<number | null>(null);
+  const menuContainerRef = useRef<HTMLDivElement | null>(null);
   const perPage = 6;
+
+  // Chiudi menu dropdown se si clicca all'esterno o si preme Escape
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (menuContainerRef.current && !menuContainerRef.current.contains(e.target as Node)) {
+        setOpenMenuTesseratoId(null);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpenMenuTesseratoId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   const filtered = tesserati.filter((t) => {
     if (selectedAnnoId && t.anno_id !== selectedAnnoId) return false;
@@ -134,8 +160,8 @@ export const TesseratiView: React.FC<Props> = ({
       </div>
 
       {/* Tabella Tesserati */}
-      <div className="card border-0 shadow-sm rounded-4 bg-white overflow-hidden">
-        <div className="table-responsive">
+      <div className="card border-0 shadow-sm rounded-4 bg-white" style={{ minHeight: '380px' }}>
+        <div className="table-responsive" style={{ minHeight: '340px' }}>
           <table className="table table-hover align-middle mb-0">
             <thead className="table-light text-uppercase small">
               <tr>
@@ -167,7 +193,7 @@ export const TesseratiView: React.FC<Props> = ({
                   const userGroups = gruppi.filter((g) => assignedGroupIds.includes(g.id));
 
                   const userQuotes = quote.filter((q) => q.tesserato_id === t.id);
-                  const quoteAperte = userQuotes.filter((q) => q.stato !== 'pagata');
+                  const quoteAperte = userQuotes.filter((q) => q.stato !== 'pagata' && q.stato !== 'annullata');
                   const daSaldare = quoteAperte.reduce((acc, q) => acc + (q.importo - (q.importo_pagato || 0)), 0);
 
                   return (
@@ -177,7 +203,19 @@ export const TesseratiView: React.FC<Props> = ({
                         <div><span className="badge bg-success-subtle text-success">{t.stato}</span></div>
                       </td>
                       <td>
-                        <strong className="fs-6">{p?.cognome} {p?.nome}</strong>
+                        <div className="d-flex align-items-center justify-content-between">
+                          <strong className="fs-6">{p?.cognome} {p?.nome}</strong>
+                          {p && onModificaPersona && (
+                            <button
+                              type="button"
+                              className="btn btn-link p-0 text-muted small ms-2 text-decoration-none"
+                              title={`Modifica anagrafica di ${p.cognome} ${p.nome}`}
+                              onClick={() => onModificaPersona(p)}
+                            >
+                              <i className="bi bi-pencil-square"></i>
+                            </button>
+                          )}
+                        </div>
                         {p?.is_minorenne ? (
                           <div className="small text-warning-emphasis">
                             <i className="bi bi-shield-check me-1"></i>Tutore: {p.tutore_cognome} ({p.tutore_telefono})
@@ -219,40 +257,162 @@ export const TesseratiView: React.FC<Props> = ({
                           <span className="badge bg-success-subtle text-success">Regolare</span>
                         )}
                       </td>
-                      <td className="text-end">
-                        <div className="btn-group btn-group-sm">
-                          {onPrintDomandaIscrizione && (
-                            <button
-                              className="btn btn-outline-secondary"
-                              title="Stampa Domanda di Iscrizione e Tesseramento"
-                              onClick={() => onPrintDomandaIscrizione(t.id)}
-                            >
-                              <i className="bi bi-file-earmark-text text-primary"></i>
-                            </button>
-                          )}
-                          {onPrintRichiestaCertificato && (
-                            <button
-                              className="btn btn-outline-secondary"
-                              title="Stampa Richiesta Certificato Medico"
-                              onClick={() => onPrintRichiestaCertificato(t.id)}
-                            >
-                              <i className="bi bi-file-medical text-danger"></i>
-                            </button>
-                          )}
+                      <td className="text-end position-relative">
+                        <div
+                          className="d-inline-block text-start"
+                          ref={openMenuTesseratoId === t.id ? menuContainerRef : null}
+                        >
                           <button
-                            className="btn btn-outline-primary"
-                            title="Iscrivi ad un altro gruppo"
-                            onClick={() => onOpenIscrizioneGruppo(t.id)}
+                            type="button"
+                            className={`btn btn-sm ${
+                              openMenuTesseratoId === t.id
+                                ? 'btn-primary'
+                                : 'btn-outline-secondary'
+                            } fw-semibold d-inline-flex align-items-center gap-1 shadow-sm`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuTesseratoId(openMenuTesseratoId === t.id ? null : t.id);
+                            }}
+                            title="Apri menu azioni tesserato"
                           >
-                            <i className="bi bi-diagram-3"></i>
+                            <i className="bi bi-gear-fill"></i>
+                            <span>Opzioni</span>
+                            <i className="bi bi-chevron-down small"></i>
                           </button>
-                          <button
-                            className="btn btn-outline-warning text-dark"
-                            title="Incassa Pagamento"
-                            onClick={() => onOpenPagamento(t.id)}
-                          >
-                            <i className="bi bi-cash-coin"></i>
-                          </button>
+
+                          {openMenuTesseratoId === t.id && (
+                            <div
+                              className="dropdown-menu show shadow-lg border-0 rounded-3 p-2 end-0 mt-1"
+                              style={{
+                                position: 'absolute',
+                                right: 0,
+                                zIndex: 1050,
+                                minWidth: '240px'
+                              }}
+                            >
+                              <div className="dropdown-header small text-uppercase fw-bold text-muted px-2 py-1" style={{ fontSize: '0.72rem' }}>
+                                Gestione & Pagamenti
+                              </div>
+
+                              <button
+                                type="button"
+                                className="dropdown-item d-flex align-items-center gap-2 rounded py-2 text-dark"
+                                onClick={() => {
+                                  setOpenMenuTesseratoId(null);
+                                  onOpenPagamento(t.id);
+                                }}
+                              >
+                                <span className="badge bg-warning-subtle text-dark p-1">
+                                  <i className="bi bi-cash-coin fs-6"></i>
+                                </span>
+                                <div>
+                                  <div className="fw-semibold">Registra Pagamento</div>
+                                  <div className="text-muted small" style={{ fontSize: '0.75rem' }}>Incassa quote o saldo</div>
+                                </div>
+                              </button>
+
+                              <button
+                                type="button"
+                                className="dropdown-item d-flex align-items-center gap-2 rounded py-2 text-dark"
+                                onClick={() => {
+                                  setOpenMenuTesseratoId(null);
+                                  onOpenIscrizioneGruppo(t.id);
+                                }}
+                              >
+                                <span className="badge bg-primary-subtle text-primary p-1">
+                                  <i className="bi bi-diagram-3 fs-6"></i>
+                                </span>
+                                <div>
+                                  <div className="fw-semibold">Iscrivi a Gruppo / Corso</div>
+                                  <div className="text-muted small" style={{ fontSize: '0.75rem' }}>Assegna ad un gruppo</div>
+                                </div>
+                              </button>
+
+                              {p && onModificaPersona && (
+                                <button
+                                  type="button"
+                                  className="dropdown-item d-flex align-items-center gap-2 rounded py-2 text-dark"
+                                  onClick={() => {
+                                    setOpenMenuTesseratoId(null);
+                                    onModificaPersona(p);
+                                  }}
+                                >
+                                  <span className="badge bg-info-subtle text-info p-1">
+                                    <i className="bi bi-pencil-square fs-6"></i>
+                                  </span>
+                                  <div>
+                                    <div className="fw-semibold">Modifica Anagrafica</div>
+                                    <div className="text-muted small" style={{ fontSize: '0.75rem' }}>Recapiti, tutore, dati</div>
+                                  </div>
+                                </button>
+                              )}
+
+                              <div className="dropdown-divider my-1"></div>
+                              <div className="dropdown-header small text-uppercase fw-bold text-muted px-2 py-1" style={{ fontSize: '0.72rem' }}>
+                                Stampe & Modulistica
+                              </div>
+
+                              {onPrintDomandaIscrizione && (
+                                <button
+                                  type="button"
+                                  className="dropdown-item d-flex align-items-center gap-2 rounded py-2 text-dark"
+                                  onClick={() => {
+                                    setOpenMenuTesseratoId(null);
+                                    onPrintDomandaIscrizione(t.id);
+                                  }}
+                                >
+                                  <span className="badge bg-light text-primary border p-1">
+                                    <i className="bi bi-file-earmark-text fs-6"></i>
+                                  </span>
+                                  <div>
+                                    <div className="fw-semibold">Domanda di Iscrizione</div>
+                                    <div className="text-muted small" style={{ fontSize: '0.75rem' }}>Modulo per firma e privacy</div>
+                                  </div>
+                                </button>
+                              )}
+
+                              {onPrintRichiestaCertificato && (
+                                <button
+                                  type="button"
+                                  className="dropdown-item d-flex align-items-center gap-2 rounded py-2 text-dark"
+                                  onClick={() => {
+                                    setOpenMenuTesseratoId(null);
+                                    onPrintRichiestaCertificato(t.id);
+                                  }}
+                                >
+                                  <span className="badge bg-light text-danger border p-1">
+                                    <i className="bi bi-file-medical fs-6"></i>
+                                  </span>
+                                  <div>
+                                    <div className="fw-semibold">Richiesta Visita Medica</div>
+                                    <div className="text-muted small" style={{ fontSize: '0.75rem' }}>Per il medico curante / sportivo</div>
+                                  </div>
+                                </button>
+                              )}
+
+                              {onOpenDisiscrizione && (
+                                <>
+                                  <div className="dropdown-divider my-1"></div>
+                                  <button
+                                    type="button"
+                                    className="dropdown-item d-flex align-items-center gap-2 rounded py-2 text-danger"
+                                    onClick={() => {
+                                      setOpenMenuTesseratoId(null);
+                                      onOpenDisiscrizione(t.id);
+                                    }}
+                                  >
+                                    <span className="badge bg-danger-subtle text-danger p-1">
+                                      <i className="bi bi-person-x fs-6"></i>
+                                    </span>
+                                    <div>
+                                      <div className="fw-semibold text-danger">Disiscrivi / Ritiro Atleta</div>
+                                      <div className="text-muted small" style={{ fontSize: '0.75rem' }}>Sgrava e annulla quote future</div>
+                                    </div>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </td>
                     </tr>

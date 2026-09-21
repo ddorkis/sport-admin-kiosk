@@ -37,6 +37,16 @@ import { CercaAnagraficaModal } from './components/modals/CercaAnagraficaModal';
 import { GestioneAnnoModal } from './components/modals/GestioneAnnoModal';
 import { CodeExportModal } from './components/code_export/CodeExportModal';
 import { StampaDocumentoModal, TipoDocumentoStampa } from './components/modals/StampaDocumentoModal';
+import { DisiscrizioneAtletaModal } from './components/modals/DisiscrizioneAtletaModal';
+import { AnnullaQuotaModal } from './components/modals/AnnullaQuotaModal';
+
+// Pagine di Inserimento a Schermo Intero (Nuova Navigazione Senza Dialog)
+import { NuovaPersonaPage } from './components/gestionale/NuovaPersonaPage';
+import { NuovoTesseramentoPage } from './components/gestionale/NuovoTesseramentoPage';
+import { NuovoPagamentoPage } from './components/gestionale/NuovoPagamentoPage';
+import { NuovoGruppoPage } from './components/gestionale/NuovoGruppoPage';
+import { NuovaIscrizioneGruppoPage } from './components/gestionale/NuovaIscrizioneGruppoPage';
+import { NuovoUtentePage } from './components/gestionale/NuovoUtentePage';
 
 // Auth
 import { LoginPage } from './components/auth/LoginPage';
@@ -52,6 +62,7 @@ export default function App() {
   const [isNuovaPersonaOpen, setIsNuovaPersonaOpen] = useState(false);
   const [isTesseramentoOpen, setIsTesseramentoOpen] = useState(false);
   const [preselectedPersonaForTess, setPreselectedPersonaForTess] = useState<number | undefined>(undefined);
+  const [personaToEdit, setPersonaToEdit] = useState<Persona | null>(null);
 
   const [isIscrizioneGruppoOpen, setIsIscrizioneGruppoOpen] = useState(false);
   const [preselectedTesseratoForGruppo, setPreselectedTesseratoForGruppo] = useState<number | undefined>(undefined);
@@ -63,6 +74,10 @@ export default function App() {
   const [isCercaAnagraficaOpen, setIsCercaAnagraficaOpen] = useState(false);
   const [isGestioneAnnoOpen, setIsGestioneAnnoOpen] = useState(false);
   const [isCodeExportOpen, setIsCodeExportOpen] = useState(false);
+
+  // Ritiro Atleta / Disiscrizione e Annulla Quota
+  const [disiscrizioneTesseratoId, setDisiscrizioneTesseratoId] = useState<number | null>(null);
+  const [quotaToAnnullare, setQuotaToAnnullare] = useState<Quota | null>(null);
 
   // Stampa Documenti Ufficiali
   const [stampaModal, setStampaModal] = useState<{
@@ -223,6 +238,16 @@ export default function App() {
 
     showToast(`Persona ${newPersona.nome} ${newPersona.cognome} registrata con successo!`);
     return newPersona;
+  };
+
+  // Gestione Modifica Persona Esistente
+  const handleUpdatePersona = (updatedPersona: Persona) => {
+    setData((prev) => ({
+      ...prev,
+      persone: prev.persone.map((p) => (p.id === updatedPersona.id ? updatedPersona : p))
+    }));
+
+    showToast(`Dati anagrafici di ${updatedPersona.cognome} ${updatedPersona.nome} aggiornati con successo!`);
   };
 
   // Gestione Tesseramento
@@ -402,6 +427,79 @@ export default function App() {
     showToast(`Pagamento di € ${newPagamento.importo.toFixed(2)} registrato (${ricevutaNumero})!`);
   };
 
+  // Gestione Disiscrizione Atleta da Corso / Ritiro con Sgravio Quote Future
+  const handleConfirmDisiscrizione = (payload: {
+    tesseratoId: number;
+    gruppoId?: number;
+    disiscriviDaTutti: boolean;
+    dataRitiro: string;
+    motivo: string;
+    annullaQuoteFuture: boolean;
+    sospendiTessera: boolean;
+  }) => {
+    // 1. Rimuovi iscrizione dal gruppo o da tutti i gruppi
+    const updatedGruppiTesserati = data.gruppi_tesserati.filter((gt) => {
+      if (gt.tesserato_id !== payload.tesseratoId) return true;
+      if (payload.disiscriviDaTutti) return false;
+      if (payload.gruppoId && gt.gruppo_id === payload.gruppoId) return false;
+      return true;
+    });
+
+    // 2. Annulla quote future non saldate se richiesto
+    let annullateCount = 0;
+    const updatedQuote = data.quote.map((q) => {
+      if (q.tesserato_id !== payload.tesseratoId) return q;
+      if (q.stato === 'pagata' || q.stato === 'annullata') return q;
+      if (!payload.disiscriviDaTutti && payload.gruppoId && q.gruppo_id !== payload.gruppoId) return q;
+
+      if (payload.annullaQuoteFuture && q.data_scadenza >= payload.dataRitiro) {
+        annullateCount++;
+        return {
+          ...q,
+          stato: 'annullata' as const,
+          note: `Annullata per ritiro/disiscrizione dal ${payload.dataRitiro} (${payload.motivo})`
+        };
+      }
+      return q;
+    });
+
+    // 3. Aggiorna stato tessera se richiesto
+    const updatedTesserati = data.tesserati.map((t) => {
+      if (t.id === payload.tesseratoId && payload.sospendiTessera) {
+        return { ...t, stato: 'Sospeso' as const };
+      }
+      return t;
+    });
+
+    setData((prev) => ({
+      ...prev,
+      gruppi_tesserati: updatedGruppiTesserati,
+      quote: updatedQuote,
+      tesserati: updatedTesserati
+    }));
+
+    const msg = `Disiscrizione registrata! ${annullateCount > 0 ? `${annullateCount} quote future sgravate/annullate.` : ''}`;
+    showToast(msg);
+  };
+
+  // Gestione Annullamento Singola Quota
+  const handleConfirmAnnullaQuota = (quotaId: number, motivazione: string) => {
+    setData((prev) => ({
+      ...prev,
+      quote: prev.quote.map((q) =>
+        q.id === quotaId
+          ? {
+              ...q,
+              stato: 'annullata' as const,
+              note: `Annullata: ${motivazione}`
+            }
+          : q
+      )
+    }));
+
+    showToast('Quota annullata con successo!');
+  };
+
   // Gestione Utenti
   const handleToggleKioskFlag = (userId: number) => {
     setData((prev) => ({
@@ -534,19 +632,52 @@ export default function App() {
                 onOpenPagamento={(tessId, quotaId) => {
                   setPreselectedTesseratoForPagamento(tessId);
                   setPreselectedQuotaForPagamento(quotaId);
-                  setIsPagamentoOpen(true);
+                  setActiveTab('nuovo_pagamento');
                 }}
-                onOpenNuovaPersona={() => setIsNuovaPersonaOpen(true)}
+                onOpenNuovaPersona={() => setActiveTab('nuova_persona')}
               />
             )}
 
             {activeTab === 'persone' && (
               <PersoneView
                 persone={data.persone}
-                onOpenNuovaPersona={() => setIsNuovaPersonaOpen(true)}
+                onOpenNuovaPersona={() => {
+                  setPersonaToEdit(null);
+                  setActiveTab('nuova_persona');
+                }}
                 onTesseraPersona={(p) => {
                   setPreselectedPersonaForTess(p.id);
-                  setIsTesseramentoOpen(true);
+                  setActiveTab('nuovo_tesseramento');
+                }}
+                onModificaPersona={(p) => {
+                  setPersonaToEdit(p);
+                  setActiveTab('nuova_persona');
+                }}
+              />
+            )}
+
+            {activeTab === 'nuova_persona' && (
+              <NuovaPersonaPage
+                initialPersona={personaToEdit}
+                onBack={() => {
+                  setPersonaToEdit(null);
+                  setActiveTab('persone');
+                }}
+                onSave={(persona) => {
+                  const saved = handleSavePersona(persona);
+                  setPersonaToEdit(null);
+                  setActiveTab('persone');
+                  return saved;
+                }}
+                onUpdate={(persona) => {
+                  handleUpdatePersona(persona);
+                  setPersonaToEdit(null);
+                  setActiveTab('persone');
+                }}
+                onSavedAndTessera={(persona) => {
+                  setPersonaToEdit(null);
+                  setPreselectedPersonaForTess(persona.id);
+                  setActiveTab('nuovo_tesseramento');
                 }}
               />
             )}
@@ -561,22 +692,45 @@ export default function App() {
                 quote={data.quote}
                 onOpenNuovoTesseramento={() => {
                   setPreselectedPersonaForTess(undefined);
-                  setIsTesseramentoOpen(true);
+                  setActiveTab('nuovo_tesseramento');
                 }}
                 onOpenIscrizioneGruppo={(tessId) => {
                   setPreselectedTesseratoForGruppo(tessId);
-                  setIsIscrizioneGruppoOpen(true);
+                  setActiveTab('iscrizione_gruppo');
                 }}
                 onOpenPagamento={(tessId) => {
                   setPreselectedTesseratoForPagamento(tessId);
                   setPreselectedQuotaForPagamento(undefined);
-                  setIsPagamentoOpen(true);
+                  setActiveTab('nuovo_pagamento');
                 }}
                 onViewQuotes={(tessId) => {
                   setActiveTab('quote');
                 }}
+                onModificaPersona={(p) => {
+                  setPersonaToEdit(p);
+                  setActiveTab('nuova_persona');
+                }}
+                onOpenDisiscrizione={(tessId) => {
+                  setDisiscrizioneTesseratoId(tessId);
+                }}
                 onPrintDomandaIscrizione={handlePrintDomandaIscrizione}
                 onPrintRichiestaCertificato={handlePrintRichiestaCertificato}
+              />
+            )}
+
+            {activeTab === 'nuovo_tesseramento' && (
+              <NuovoTesseramentoPage
+                onBack={() => setActiveTab('tesserati')}
+                persone={data.persone}
+                anni={data.anni}
+                gruppi={data.gruppi}
+                tesseratiEsistenti={data.tesserati}
+                preselectedPersonaId={preselectedPersonaForTess}
+                onOpenNuovaPersona={() => setActiveTab('nuova_persona')}
+                onSave={(tessData) => {
+                  handleSaveTesseramento(tessData);
+                  setActiveTab('tesserati');
+                }}
               />
             )}
 
@@ -589,8 +743,39 @@ export default function App() {
                 anni={data.anni}
                 quote={data.quote}
                 onGeneraQuotePerGruppo={handleGeneraQuotePerGruppo}
-                onCreaNuovoGruppo={handleCreaNuovoGruppo}
-                onOpenIscrizioneGruppo={() => setIsIscrizioneGruppoOpen(true)}
+                onOpenNuovoGruppo={() => setActiveTab('nuovo_gruppo')}
+                onOpenIscrizioneGruppo={() => {
+                  setPreselectedTesseratoForGruppo(undefined);
+                  setActiveTab('iscrizione_gruppo');
+                }}
+                onOpenDisiscrizione={(tessId) => {
+                  setDisiscrizioneTesseratoId(tessId);
+                }}
+              />
+            )}
+
+            {activeTab === 'nuovo_gruppo' && (
+              <NuovoGruppoPage
+                onBack={() => setActiveTab('gruppi')}
+                anni={data.anni}
+                onSave={(grp) => {
+                  handleCreaNuovoGruppo(grp);
+                  setActiveTab('gruppi');
+                }}
+              />
+            )}
+
+            {activeTab === 'iscrizione_gruppo' && (
+              <NuovaIscrizioneGruppoPage
+                onBack={() => setActiveTab('gruppi')}
+                tesserati={data.tesserati}
+                persone={data.persone}
+                gruppi={data.gruppi}
+                preselectedTesseratoId={preselectedTesseratoForGruppo}
+                onSave={(iscr) => {
+                  handleSaveIscrizioneGruppo(iscr.tesserato_id, iscr.gruppo_id);
+                  setActiveTab('gruppi');
+                }}
               />
             )}
 
@@ -604,7 +789,10 @@ export default function App() {
                 onOpenPagamento={(tessId, quotaId) => {
                   setPreselectedTesseratoForPagamento(tessId);
                   setPreselectedQuotaForPagamento(quotaId);
-                  setIsPagamentoOpen(true);
+                  setActiveTab('nuovo_pagamento');
+                }}
+                onAnnullaQuota={(q) => {
+                  setQuotaToAnnullare(q);
                 }}
               />
             )}
@@ -619,9 +807,25 @@ export default function App() {
                 onOpenNuovoPagamento={() => {
                   setPreselectedTesseratoForPagamento(undefined);
                   setPreselectedQuotaForPagamento(undefined);
-                  setIsPagamentoOpen(true);
+                  setActiveTab('nuovo_pagamento');
                 }}
                 onOpenStampaUfficiale={handlePrintRicevuta}
+              />
+            )}
+
+            {activeTab === 'nuovo_pagamento' && (
+              <NuovoPagamentoPage
+                onBack={() => setActiveTab('pagamenti')}
+                persone={data.persone}
+                tesserati={data.tesserati}
+                quote={data.quote}
+                associazione={data.associazione}
+                preselectedQuotaId={preselectedQuotaForPagamento}
+                preselectedTesseratoId={preselectedTesseratoForPagamento}
+                onSave={(pagData) => {
+                  handleSavePagamento(pagData);
+                  setActiveTab('pagamenti');
+                }}
               />
             )}
 
@@ -630,8 +834,18 @@ export default function App() {
                 utenti={data.utenti}
                 currentUser={currentUser}
                 onToggleKioskFlag={handleToggleKioskFlag}
-                onCreaUtente={handleCreaUtente}
+                onOpenNuovoUtente={() => setActiveTab('nuovo_utente')}
                 onSwitchUser={(u) => handleLogin(u)}
+              />
+            )}
+
+            {activeTab === 'nuovo_utente' && (
+              <NuovoUtentePage
+                onBack={() => setActiveTab('utenti')}
+                onSave={(u) => {
+                  handleCreaUtente(u);
+                  setActiveTab('utenti');
+                }}
               />
             )}
 
@@ -735,6 +949,41 @@ export default function App() {
         annoAttivo={annoAttivo}
         gruppi={stampaModal.gruppi}
       />
+
+      {/* Modale Disiscrizione / Ritiro Atleta */}
+      {disiscrizioneTesseratoId && (() => {
+        const tess = data.tesserati.find((t) => t.id === disiscrizioneTesseratoId);
+        const pers = tess ? data.persone.find((p) => p.id === tess.persona_id) : null;
+        if (!tess || !pers) return null;
+        return (
+          <DisiscrizioneAtletaModal
+            isOpen={true}
+            onClose={() => setDisiscrizioneTesseratoId(null)}
+            tesserato={tess}
+            persona={pers}
+            gruppi={data.gruppi}
+            gruppiTesserati={data.gruppi_tesserati}
+            quote={data.quote}
+            onConfirmDisiscrizione={handleConfirmDisiscrizione}
+          />
+        );
+      })()}
+
+      {/* Modale Annulla Singola Quota */}
+      {quotaToAnnullare && (() => {
+        const tess = data.tesserati.find((t) => t.id === quotaToAnnullare.tesserato_id);
+        const pers = tess ? data.persone.find((p) => p.id === tess.persona_id) : null;
+        return (
+          <AnnullaQuotaModal
+            isOpen={true}
+            onClose={() => setQuotaToAnnullare(null)}
+            quota={quotaToAnnullare}
+            persona={pers}
+            tesserato={tess}
+            onConfirmAnnulla={handleConfirmAnnullaQuota}
+          />
+        );
+      })()}
     </div>
   );
 }

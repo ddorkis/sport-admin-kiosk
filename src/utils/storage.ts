@@ -111,7 +111,24 @@ export function saveState(state: AppState): void {
 
 // Data Getters
 export function getAssociazione(): Associazione {
-  return loadOrInit<Associazione>(STORAGE_KEYS.ASSOCIAZIONE, INITIAL_ASSOCIAZIONE);
+  const ass = loadOrInit<Associazione>(STORAGE_KEYS.ASSOCIAZIONE, INITIAL_ASSOCIAZIONE);
+  if (!ass.disciplina || !ass.enti_affiliati || ass.enti_affiliati.length === 0 || ass.denominazione === 'A.S.D. Polisportiva Aurora') {
+    const upgraded: Associazione = {
+      ...INITIAL_ASSOCIAZIONE,
+      ...ass,
+      disciplina: ass.disciplina || INITIAL_ASSOCIAZIONE.disciplina,
+      enti_affiliati: (ass.enti_affiliati && ass.enti_affiliati.length > 0) ? ass.enti_affiliati : INITIAL_ASSOCIAZIONE.enti_affiliati,
+      specialita: ass.specialita || INITIAL_ASSOCIAZIONE.specialita,
+      codice_affiliazione_fisr: ass.codice_affiliazione_fisr || INITIAL_ASSOCIAZIONE.codice_affiliazione_fisr,
+      registro_rasd: ass.registro_rasd || INITIAL_ASSOCIAZIONE.registro_rasd,
+      denominazione: ass.denominazione === 'A.S.D. Polisportiva Aurora' ? INITIAL_ASSOCIAZIONE.denominazione : ass.denominazione,
+      email: ass.email === 'segreteria@polisportivaurora.it' ? INITIAL_ASSOCIAZIONE.email : (ass.email || INITIAL_ASSOCIAZIONE.email),
+      codice_affiliazione: ass.codice_affiliazione === 'CONI / CSEN n. 45892' ? INITIAL_ASSOCIAZIONE.codice_affiliazione : (ass.codice_affiliazione || INITIAL_ASSOCIAZIONE.codice_affiliazione)
+    };
+    saveAssociazione(upgraded);
+    return upgraded;
+  }
+  return ass;
 }
 
 export function saveAssociazione(data: Associazione): void {
@@ -143,7 +160,12 @@ export function getTesserati(): Tesserato[] {
 }
 
 export function getGruppi(): Gruppo[] {
-  return loadOrInit<Gruppo[]>(STORAGE_KEYS.GRUPPI, INITIAL_GRUPPI);
+  const g = loadOrInit<Gruppo[]>(STORAGE_KEYS.GRUPPI, INITIAL_GRUPPI);
+  if (g.length > 0 && g[0].nome_gruppo.includes('Basket')) {
+    saveToStorage(STORAGE_KEYS.GRUPPI, INITIAL_GRUPPI);
+    return INITIAL_GRUPPI;
+  }
+  return g;
 }
 
 export function getGruppiTesserati(): GruppoTesserato[] {

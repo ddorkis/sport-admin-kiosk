@@ -5,7 +5,7 @@ interface Props {
   utenti: Utente[];
   currentUser: Utente;
   onToggleKioskFlag: (userId: number) => void;
-  onCreaUtente: (utente: Omit<Utente, 'id'>) => void;
+  onOpenNuovoUtente: () => void;
   onSwitchUser: (user: Utente) => void;
 }
 
@@ -13,36 +13,9 @@ export const UtentiView: React.FC<Props> = ({
   utenti,
   currentUser,
   onToggleKioskFlag,
-  onCreaUtente,
+  onOpenNuovoUtente,
   onSwitchUser
 }) => {
-  const [isCreating, setIsCreating] = useState(false);
-  const [username, setUsername] = useState('');
-  const [nome, setNome] = useState('');
-  const [ruolo, setRuolo] = useState<Utente['ruolo']>('operatore');
-  const [isKiosk, setIsKiosk] = useState(false);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!username.trim() || !nome.trim()) {
-      alert('Compila username e nome.');
-      return;
-    }
-
-    onCreaUtente({
-      username: username.trim(),
-      nome: nome.trim(),
-      ruolo,
-      is_kiosk: isKiosk,
-      attivo: true
-    });
-
-    setIsCreating(false);
-    setUsername('');
-    setNome('');
-    setIsKiosk(false);
-  };
-
   return (
     <div className="container-fluid py-4">
       <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
@@ -54,7 +27,7 @@ export const UtentiView: React.FC<Props> = ({
             Controllo accessi e configurazione della modalità Kiosk per reception, tablet o totem
           </p>
         </div>
-        <button className="btn btn-primary fw-bold" onClick={() => setIsCreating(true)}>
+        <button className="btn btn-primary fw-bold" onClick={onOpenNuovoUtente}>
           <i className="bi bi-person-plus-fill me-1"></i> Nuovo Utente
         </button>
       </div>
@@ -145,88 +118,6 @@ export const UtentiView: React.FC<Props> = ({
           </table>
         </div>
       </div>
-
-      {/* Modal Creazione Nuovo Utente */}
-      {isCreating && (
-        <div className="modal show d-block bg-dark bg-opacity-75" tabIndex={-1} style={{ zIndex: 1055 }}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content border-0 rounded-4 shadow-lg">
-              <form onSubmit={handleSubmit}>
-                <div className="modal-header bg-primary text-white">
-                  <h5 className="modal-title fw-bold">
-                    <i className="bi bi-person-plus-fill me-2"></i> Nuovo Account Utente
-                  </h5>
-                  <button type="button" className="btn-close btn-close-white" onClick={() => setIsCreating(false)}></button>
-                </div>
-                <div className="modal-body p-4">
-                  <div className="row g-3">
-                    <div className="col-12">
-                      <label className="form-label fw-semibold">Nome Completo *</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="Es. Desk Reception 2, Maria Rossi"
-                        value={nome}
-                        onChange={(e) => setNome(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="col-12">
-                      <label className="form-label fw-semibold">Username *</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="Es. totem_ingresso, segreteria2"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="col-12">
-                      <label className="form-label fw-semibold">Ruolo</label>
-                      <select
-                        className="form-select"
-                        value={ruolo}
-                        onChange={(e) => setRuolo(e.target.value as Utente['ruolo'])}
-                      >
-                        <option value="desk">Desk / Reception Totem</option>
-                        <option value="operatore">Operatore Segreteria</option>
-                        <option value="admin">Amministratore Completo</option>
-                      </select>
-                    </div>
-
-                    <div className="col-12 p-3 bg-light rounded-3 border">
-                      <div className="form-check form-switch">
-                        <input
-                          className="form-check-input"
-                          type="checkbox"
-                          id="modalIsKiosk"
-                          checked={isKiosk}
-                          onChange={(e) => setIsKiosk(e.target.checked)}
-                        />
-                        <label className="form-check-label fw-bold" htmlFor="modalIsKiosk">
-                          Attiva Flag Modalità KIOSK
-                        </label>
-                      </div>
-                      <small className="text-muted d-block mt-1">
-                        Se abilitato, l'utente vedrà subito i grandi tasti touch per la reception dopo il login.
-                      </small>
-                    </div>
-                  </div>
-                </div>
-                <div className="modal-footer bg-light">
-                  <button type="button" className="btn btn-secondary" onClick={() => setIsCreating(false)}>
-                    Annulla
-                  </button>
-                  <button type="submit" className="btn btn-primary fw-bold">
-                    Crea Utente
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

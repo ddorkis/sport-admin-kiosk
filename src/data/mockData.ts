@@ -1,7 +1,8 @@
 import { Associazione, Persona, Anno, Tesserato, Gruppo, GruppoTesserato, Quota, Pagamento, Utente } from '../types';
 
 export const INITIAL_ASSOCIAZIONE: Associazione = {
-  denominazione: 'A.S.D. Polisportiva Aurora',
+  denominazione: 'A.S.D. Pattinaggio Artistico Aurora',
+  disciplina: 'Pattinaggio Artistico a Rotelle',
   codice_fiscale: '97854120584',
   partita_iva: '04859620581',
   indirizzo: 'Via dello Sport, 24',
@@ -10,9 +11,52 @@ export const INITIAL_ASSOCIAZIONE: Associazione = {
   provincia: 'RM',
   legale_rappresentante: 'Alessandro Bianchi',
   telefono: '06 5894123',
-  email: 'segreteria@polisportivaurora.it',
-  pec: 'polisportivaurora@pec.it',
-  codice_affiliazione: 'CONI / CSEN n. 45892',
+  email: 'segreteria@pattinaggioaurora.it',
+  pec: 'pattinaggioaurora@pec.it',
+  codice_affiliazione: 'FISR n. 3942 • UISP • AICS',
+  codice_affiliazione_fisr: 'FISR n. 3942',
+  registro_rasd: 'RASD-RM-048291',
+  enti_affiliati: [
+    {
+      id: 'fsn-fisr',
+      tipo: 'FSN',
+      sigla: 'FISR',
+      denominazione_estesa: 'Federazione Italiana Sport Rotellistici',
+      codice_societa: '3942',
+      attivo: true
+    },
+    {
+      id: 'eps-uisp',
+      tipo: 'EPS',
+      sigla: 'UISP',
+      denominazione_estesa: 'Unione Italiana Sport Per tutti - Settore Pattinaggio',
+      codice_societa: 'UISP-RM-8492',
+      attivo: true
+    },
+    {
+      id: 'eps-aics',
+      tipo: 'EPS',
+      sigla: 'AICS',
+      denominazione_estesa: 'Associazione Italiana Cultura Sport - Pattinaggio',
+      codice_societa: 'AICS-99321',
+      attivo: true
+    },
+    {
+      id: 'eps-csen',
+      tipo: 'EPS',
+      sigla: 'CSEN',
+      denominazione_estesa: 'Centro Sportivo Educativo Nazionale',
+      codice_societa: 'CSEN-45892',
+      attivo: true
+    }
+  ],
+  specialita: [
+    'Singolo Maschile e Femminile',
+    'Solo Dance Internazionale & Divisione Nazionale',
+    'Coppia Artistico & Danza',
+    'Gruppi Show, Quartetti & Precision',
+    'Avviamento Primi Passi su Rotelle'
+  ],
   iban: 'IT60X0542811101000000123456'
 };
 
@@ -192,58 +236,70 @@ export const INITIAL_GRUPPI: Gruppo[] = [
   {
     id: 1,
     anno_id: 1,
-    nome_gruppo: 'Basket Under 14 Maschile',
-    descrizione: 'Allenamenti Lun-Mer-Ven 17:30 - 19:00 Palazzetto A',
-    categoria: 'Pallacanestro Giovanile',
-    quota_mensile: 60.00,
+    nome_gruppo: 'Avviamento Pattinaggio (Primi Passi / Cuccioli)',
+    descrizione: 'Corso base avviamento su rotelle: impostazione, equilibrio e primi fili',
+    categoria: 'Avviamento Pattinaggio',
+    quota_mensile: 50.00,
     giorno_scadenza_mensile: 10,
     data_inizio: '2024-09-01',
-    data_fine: '2025-05-31', // 9 mesi (Settembre - Maggio)
-    istruttore: 'Coach Valerio Mancini'
+    data_fine: '2025-05-31',
+    istruttore: 'Maestra Elena Riva'
   },
   {
     id: 2,
     anno_id: 1,
-    nome_gruppo: 'Volley Minivolley Promo',
-    descrizione: 'Allenamenti Mar-Gio 16:30 - 18:00 Palestra Scuole',
-    categoria: 'Pallavolo Avviamento',
-    quota_mensile: 45.00,
+    nome_gruppo: 'Solo Dance FISR / World Skate',
+    descrizione: 'Allenamenti tecnici Solo Dance: danze obbligatorie, style dance e libero',
+    categoria: 'Agonismo FISR / EPS',
+    quota_mensile: 75.00,
     giorno_scadenza_mensile: 10,
-    data_inizio: '2024-10-01',
-    data_fine: '2025-05-31', // 8 mesi
-    istruttore: 'Istruttrice Laura Donati'
+    data_inizio: '2024-09-01',
+    data_fine: '2025-05-31',
+    istruttore: 'Tecnico Federale FISR Roberto Conti'
   },
   {
     id: 3,
     anno_id: 1,
-    nome_gruppo: 'Ginnastica Artistica Junior',
-    descrizione: 'Corso intermedio con attrezzistica',
-    categoria: 'Ginnastica',
-    quota_mensile: 55.00,
+    nome_gruppo: 'Agonismo Singolo FISR (Salti e Trottole)',
+    descrizione: 'Preparazione gare provinciali, regionali e Campionati Italiani FISR',
+    categoria: 'Agonismo Federale',
+    quota_mensile: 80.00,
+    giorno_scadenza_mensile: 10,
+    data_inizio: '2024-09-01',
+    data_fine: '2025-05-31',
+    istruttore: 'Coach Silvia Moretti (FISR Livello 3)'
+  },
+  {
+    id: 4,
+    anno_id: 1,
+    nome_gruppo: 'Gruppo Show & Precision (Spettacolo)',
+    descrizione: 'Coreografie di gruppo sincronizzato per trofei promozionali e rassegne FISR/UISP',
+    categoria: 'Gruppi Spettacolo',
+    quota_mensile: 65.00,
     giorno_scadenza_mensile: 15,
     data_inizio: '2024-09-15',
     data_fine: '2025-06-15',
-    istruttore: 'Silvia Moretti'
+    istruttore: 'Coreografa Laura Bellini'
   }
 ];
 
 export const INITIAL_GRUPPI_TESSERATI: GruppoTesserato[] = [
-  { id: 1, gruppo_id: 1, tesserato_id: 1, data_iscrizione: '2024-09-03' }, // Marco Rossi in Basket U14
-  { id: 2, gruppo_id: 2, tesserato_id: 2, data_iscrizione: '2024-09-06' }, // Sofia Bianchi in Minivolley
-  { id: 3, gruppo_id: 1, tesserato_id: 3, data_iscrizione: '2024-09-10' }, // Leonardo Ferrari in Basket U14
-  { id: 4, gruppo_id: 2, tesserato_id: 4, data_iscrizione: '2024-09-15' }, // Giulia Romano in Minivolley
-  { id: 5, gruppo_id: 1, tesserato_id: 5, data_iscrizione: '2024-09-01' }  // Matteo Colombo in Basket U14
+  { id: 1, gruppo_id: 3, tesserato_id: 1, data_iscrizione: '2024-09-03' }, // Marco Rossi in Agonismo Singolo
+  { id: 2, gruppo_id: 1, tesserato_id: 2, data_iscrizione: '2024-09-06' }, // Sofia Bianchi in Avviamento
+  { id: 3, gruppo_id: 2, tesserato_id: 3, data_iscrizione: '2024-09-10' }, // Leonardo Ferrari in Solo Dance
+  { id: 4, gruppo_id: 4, tesserato_id: 4, data_iscrizione: '2024-09-15' }, // Giulia Romano in Gruppo Show
+  { id: 5, gruppo_id: 2, tesserato_id: 5, data_iscrizione: '2024-09-01' }  // Matteo Colombo in Solo Dance
 ];
 
 export const INITIAL_QUOTE: Quota[] = [
-  // Marco Rossi (Tesserato 1 - Basket Under 14, 60€/mese)
+  // Marco Rossi (Tesserato 1 - Agonismo Singolo FISR, 80€/mese)
   {
     id: 1,
     tesserato_id: 1,
-    gruppo_id: 1,
-    causale: 'Quota Settembre 2024 - Basket Under 14',
-    importo: 60.00,
-    importo_pagato: 60.00,
+    gruppo_id: 3,
+    causale: 'Quota Settembre 2024 - Agonismo Singolo FISR',
+    importo: 80.00,
+    importo_pagato: 80.00,
     data_scadenza: '2024-09-10',
     stato: 'pagata',
     mese_riferimento: '2024-09'
@@ -251,10 +307,10 @@ export const INITIAL_QUOTE: Quota[] = [
   {
     id: 2,
     tesserato_id: 1,
-    gruppo_id: 1,
-    causale: 'Quota Ottobre 2024 - Basket Under 14',
-    importo: 60.00,
-    importo_pagato: 60.00,
+    gruppo_id: 3,
+    causale: 'Quota Ottobre 2024 - Agonismo Singolo FISR',
+    importo: 80.00,
+    importo_pagato: 80.00,
     data_scadenza: '2024-10-10',
     stato: 'pagata',
     mese_riferimento: '2024-10'
@@ -262,101 +318,90 @@ export const INITIAL_QUOTE: Quota[] = [
   {
     id: 3,
     tesserato_id: 1,
-    gruppo_id: 1,
-    causale: 'Quota Novembre 2024 - Basket Under 14',
-    importo: 60.00,
-    importo_pagato: 30.00,
+    gruppo_id: 3,
+    causale: 'Quota Novembre 2024 - Agonismo Singolo FISR',
+    importo: 80.00,
+    importo_pagato: 40.00,
     data_scadenza: '2024-11-10',
-    stato: 'parziale', // In ritardo parziale
+    stato: 'parziale',
     mese_riferimento: '2024-11'
   },
   {
     id: 4,
     tesserato_id: 1,
-    gruppo_id: 1,
-    causale: 'Quota Dicembre 2024 - Basket Under 14',
-    importo: 60.00,
+    gruppo_id: 3,
+    causale: 'Quota Dicembre 2024 - Agonismo Singolo FISR',
+    importo: 80.00,
     importo_pagato: 0.00,
     data_scadenza: '2024-12-10',
-    stato: 'da_pagare', // Scaduta non pagata!
+    stato: 'da_pagare',
     mese_riferimento: '2024-12'
   },
+
+  // Sofia Bianchi (Tesserato 2 - Avviamento Pattinaggio, 50€/mese)
   {
     id: 5,
-    tesserato_id: 1,
-    gruppo_id: 1,
-    causale: 'Quota Gennaio 2025 - Basket Under 14',
-    importo: 60.00,
-    importo_pagato: 0.00,
-    data_scadenza: '2025-01-10',
-    stato: 'da_pagare',
-    mese_riferimento: '2025-01'
-  },
-
-  // Sofia Bianchi (Tesserato 2 - Volley Minivolley, 45€/mese)
-  {
-    id: 6,
     tesserato_id: 2,
-    gruppo_id: 2,
-    causale: 'Quota Ottobre 2024 - Volley Minivolley',
-    importo: 45.00,
-    importo_pagato: 45.00,
+    gruppo_id: 1,
+    causale: 'Quota Ottobre 2024 - Avviamento Pattinaggio',
+    importo: 50.00,
+    importo_pagato: 50.00,
     data_scadenza: '2024-10-10',
     stato: 'pagata',
     mese_riferimento: '2024-10'
   },
   {
-    id: 7,
+    id: 6,
     tesserato_id: 2,
-    gruppo_id: 2,
-    causale: 'Quota Novembre 2024 - Volley Minivolley',
-    importo: 45.00,
-    importo_pagato: 45.00,
+    gruppo_id: 1,
+    causale: 'Quota Novembre 2024 - Avviamento Pattinaggio',
+    importo: 50.00,
+    importo_pagato: 50.00,
     data_scadenza: '2024-11-10',
     stato: 'pagata',
     mese_riferimento: '2024-11'
   },
   {
-    id: 8,
+    id: 7,
     tesserato_id: 2,
-    gruppo_id: 2,
-    causale: 'Quota Dicembre 2024 - Volley Minivolley',
-    importo: 45.00,
+    gruppo_id: 1,
+    causale: 'Quota Dicembre 2024 - Avviamento Pattinaggio',
+    importo: 50.00,
     importo_pagato: 0.00,
     data_scadenza: '2024-12-10',
-    stato: 'da_pagare', // Scaduta non pagata!
+    stato: 'da_pagare',
     mese_riferimento: '2024-12'
   },
 
-  // Leonardo Ferrari (Tesserato 3 - Basket Under 14, 60€/mese)
+  // Leonardo Ferrari (Tesserato 3 - Solo Dance FISR, 75€/mese)
   {
-    id: 9,
+    id: 8,
     tesserato_id: 3,
-    gruppo_id: 1,
-    causale: 'Quota Settembre 2024 - Basket Under 14',
-    importo: 60.00,
-    importo_pagato: 60.00,
+    gruppo_id: 2,
+    causale: 'Quota Settembre 2024 - Solo Dance FISR',
+    importo: 75.00,
+    importo_pagato: 75.00,
     data_scadenza: '2024-09-10',
     stato: 'pagata',
     mese_riferimento: '2024-09'
   },
   {
-    id: 10,
+    id: 9,
     tesserato_id: 3,
-    gruppo_id: 1,
-    causale: 'Quota Ottobre 2024 - Basket Under 14',
-    importo: 60.00,
+    gruppo_id: 2,
+    causale: 'Quota Ottobre 2024 - Solo Dance FISR',
+    importo: 75.00,
     importo_pagato: 0.00,
-    data_scadenza: '2024-10-10', // Molto scaduta!
+    data_scadenza: '2024-10-10',
     stato: 'da_pagare',
     mese_riferimento: '2024-10'
   },
   {
-    id: 11,
+    id: 10,
     tesserato_id: 3,
-    gruppo_id: 1,
-    causale: 'Quota Novembre 2024 - Basket Under 14',
-    importo: 60.00,
+    gruppo_id: 2,
+    causale: 'Quota Novembre 2024 - Solo Dance FISR',
+    importo: 75.00,
     importo_pagato: 0.00,
     data_scadenza: '2024-11-10',
     stato: 'da_pagare',
@@ -370,10 +415,10 @@ export const INITIAL_PAGAMENTI: Pagamento[] = [
     id: 1,
     tesserato_id: 1,
     quota_id: 1,
-    importo: 60.00,
+    importo: 80.00,
     data_pagamento: '2024-09-08 17:45',
     metodo_pagamento: 'pos',
-    causale: 'Saldo Quota Settembre 2024 - Basket Under 14',
+    causale: 'Saldo Quota Settembre 2024 - Agonismo Singolo FISR',
     ricevuta_numero: 'RIC-2024-0012',
     note: 'Pagato dal papà Giuseppe con bancomat al desk'
   },
@@ -382,10 +427,10 @@ export const INITIAL_PAGAMENTI: Pagamento[] = [
     id: 2,
     tesserato_id: 1,
     quota_id: 2,
-    importo: 60.00,
+    importo: 80.00,
     data_pagamento: '2024-10-05 18:10',
     metodo_pagamento: 'contanti',
-    causale: 'Saldo Quota Ottobre 2024 - Basket Under 14',
+    causale: 'Saldo Quota Ottobre 2024 - Agonismo Singolo FISR',
     ricevuta_numero: 'RIC-2024-0045',
     note: 'Contanti precisi'
   },
@@ -394,48 +439,48 @@ export const INITIAL_PAGAMENTI: Pagamento[] = [
     id: 3,
     tesserato_id: 1,
     quota_id: 3,
-    importo: 30.00,
+    importo: 40.00,
     data_pagamento: '2024-11-12 16:30',
     metodo_pagamento: 'satispay',
-    causale: 'Acconto Quota Novembre 2024 - Basket Under 14',
+    causale: 'Acconto Quota Novembre 2024 - Agonismo Singolo FISR',
     ricevuta_numero: 'RIC-2024-0078',
-    note: 'Rimangono 30€ da saldare'
+    note: 'Rimangono 40€ da saldare'
   },
   // Pagamento NON riconducibile a quota (es. Kit gara societario / borsa)
   {
     id: 4,
     tesserato_id: 1,
-    quota_id: null, // Pagamento libero / non quota!
-    importo: 45.00,
+    quota_id: null,
+    importo: 50.00,
     data_pagamento: '2024-09-15 11:20',
     metodo_pagamento: 'pos',
-    causale: 'Acquisto Kit Gara Ufficiale 2024 (Maglia + Pantaloncino + Zaino)',
+    causale: 'Quota Tesseramento Federale FISR 2024/2025 e Assicurazione Agonistica',
     ricevuta_numero: 'RIC-2024-0023',
-    note: 'Taglia M, consegnata'
+    note: 'Tesserino federale FISR emesso'
   },
-  // Pagamento legato a Quota 6 (Sofia Bianchi)
+  // Pagamento legato a Quota 5 (Sofia Bianchi)
   {
     id: 5,
     tesserato_id: 2,
-    quota_id: 6,
-    importo: 45.00,
+    quota_id: 5,
+    importo: 50.00,
     data_pagamento: '2024-10-02 16:50',
     metodo_pagamento: 'bonifico',
-    causale: 'Quota Ottobre 2024 - Volley Minivolley',
+    causale: 'Quota Ottobre 2024 - Avviamento Pattinaggio',
     ricevuta_numero: 'RIC-2024-0038',
     note: 'Accreditato su c/c IBAN'
   },
-  // Altro pagamento non riconducibile a quota (Visita medico-sportiva o Tesseramento federale)
+  // Altro pagamento (Tesseramento Ente di Promozione UISP)
   {
     id: 6,
     tesserato_id: 3,
     quota_id: null,
-    importo: 25.00,
+    importo: 30.00,
     data_pagamento: '2024-09-10 18:00',
     metodo_pagamento: 'contanti',
-    causale: 'Quota Assicurativa Integrativa FIP',
+    causale: 'Tesseramento Ente di Promozione Sportiva (UISP) e Circuito Trofei',
     ricevuta_numero: 'RIC-2024-0019',
-    note: 'Pratica inviata in federazione'
+    note: 'Iscrizione circuito promozionale'
   }
 ];
 

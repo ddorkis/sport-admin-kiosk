@@ -1,5 +1,15 @@
+export interface EnteAffiliato {
+  id: string;
+  tipo: 'FSN' | 'EPS' | 'DSA'; // FSN (es. FISR), EPS (es. UISP, AICS, CSEN), DSA
+  sigla: string; // "FISR", "UISP", "AICS", "CSEN", "PGS", ecc.
+  denominazione_estesa?: string;
+  codice_societa: string; // Codice identificativo della società
+  attivo?: boolean;
+}
+
 export interface Associazione {
   denominazione: string;
+  disciplina: string; // "Pattinaggio Artistico a Rotelle"
   codice_fiscale: string;
   partita_iva: string;
   indirizzo: string;
@@ -10,7 +20,11 @@ export interface Associazione {
   telefono?: string;
   email?: string;
   pec?: string;
-  codice_affiliazione?: string;
+  codice_affiliazione?: string; // generico/storico
+  codice_affiliazione_fisr?: string; // Codice FISR societario
+  registro_rasd?: string; // Iscrizione Registro RASD / Dipartimento Sport
+  enti_affiliati: EnteAffiliato[]; // Federazione FISR + Enti di Promozione Sportiva multipli
+  specialita?: string[]; // Singolo, Solo Dance, Coppia Artistico, Gruppi Show, Avviamento
   iban?: string;
 }
 
@@ -89,6 +103,7 @@ export interface Quota {
   data_scadenza: string; // YYYY-MM-DD
   stato: StatoQuota;
   mese_riferimento?: string; // "2024-10"
+  note?: string; // es. "Annullata per ritiro atleta dal 01/03/2026"
 }
 
 export type MetodoPagamento = 'contanti' | 'pos' | 'bonifico' | 'satispay';

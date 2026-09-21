@@ -240,13 +240,28 @@ export const PagamentiView: React.FC<Props> = ({
                         <strong className="text-success fs-6">+ € {p.importo.toFixed(2)}</strong>
                       </td>
                       <td className="text-end">
-                        <button
-                          className="btn btn-sm btn-outline-secondary"
-                          title="Visualizza Ricevuta"
-                          onClick={() => setRicevutaModal(p)}
-                        >
-                          <i className="bi bi-receipt me-1"></i> Ricevuta
-                        </button>
+                        <div className="btn-group btn-group-sm">
+                          <button
+                            className="btn btn-outline-primary fw-semibold"
+                            title="Stampa / Scarica PDF Ricevuta A4 Ufficiale"
+                            onClick={() => {
+                              if (onOpenStampaUfficiale) {
+                                onOpenStampaUfficiale(p);
+                              } else {
+                                setRicevutaModal(p);
+                              }
+                            }}
+                          >
+                            <i className="bi bi-printer me-1"></i> Stampa A4
+                          </button>
+                          <button
+                            className="btn btn-outline-secondary"
+                            title="Anteprima Veloce"
+                            onClick={() => setRicevutaModal(p)}
+                          >
+                            <i className="bi bi-eye"></i>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -352,19 +367,20 @@ export const PagamentiView: React.FC<Props> = ({
               </div>
               <div className="modal-footer bg-light d-flex justify-content-between">
                 <div className="d-flex gap-2">
-                  <button className="btn btn-primary" onClick={() => window.print()}>
-                    <i className="bi bi-printer me-1"></i> Stampa Rapida
-                  </button>
-                  {onOpenStampaUfficiale && (
+                  {onOpenStampaUfficiale ? (
                     <button
-                      className="btn btn-outline-primary"
+                      className="btn btn-primary fw-bold"
                       onClick={() => {
                         const cur = ricevutaModal;
                         setRicevutaModal(null);
                         onOpenStampaUfficiale(cur);
                       }}
                     >
-                      <i className="bi bi-file-earmark-pdf me-1"></i> Modulo A4 Ufficiale
+                      <i className="bi bi-printer-fill me-1"></i> Stampa / Scarica PDF A4
+                    </button>
+                  ) : (
+                    <button className="btn btn-primary" onClick={() => window.print()}>
+                      <i className="bi bi-printer me-1"></i> Stampa
                     </button>
                   )}
                 </div>
