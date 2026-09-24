@@ -108,6 +108,27 @@ export interface Quota {
 
 export type MetodoPagamento = 'contanti' | 'pos' | 'bonifico' | 'satispay';
 
+export type CategoriaSpesa =
+  | 'Affitto Impianti / Pista'
+  | 'Compensi Tecnici / Allenatori'
+  | 'Tesseramenti & Affiliazioni (FISR/EPS)'
+  | 'Assicurazioni'
+  | 'Materiale Sportivo & Divise'
+  | 'Gare & Trasferte'
+  | 'Amministrazione & Commercialista'
+  | 'Altro';
+
+export interface SpesaPrevisionale {
+  id: number;
+  anno_id: number;
+  titolo: string;
+  categoria: CategoriaSpesa;
+  importo_mensile: number;
+  mesi: string[]; // es. ["2024-09", "2024-10", ...]
+  ricorrente: boolean;
+  note?: string;
+}
+
 export interface Pagamento {
   id: number;
   tesserato_id: number;

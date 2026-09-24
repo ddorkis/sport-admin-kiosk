@@ -302,51 +302,16 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                 fontFamily: 'system-ui, -apple-system, sans-serif'
               }}
             >
-              {/* CARTA INTESTATA ASSOCIAZIONE SPORTIVA */}
-              <div className="border-bottom pb-4 mb-4" style={{ borderColor: '#0d6efd' }}>
+              {/* CARTA INTESTATA ASSOCIAZIONE SPORTIVA (Senza riquadri colorati per la stampa) */}
+              <div className="border-bottom pb-3 mb-4" style={{ borderColor: '#212529', borderBottomWidth: '2px' }}>
                 <div className="row align-items-center">
                   <div className="col-7">
-                    <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          backgroundColor: '#0d6efd',
-                          color: '#ffffff',
-                          fontSize: '0.72rem',
-                          fontWeight: 700,
-                          textTransform: 'uppercase',
-                          padding: '3px 8px',
-                          borderRadius: '4px',
-                          lineHeight: '1.2'
-                        }}
-                      >
-                        {associazione.disciplina || 'Pattinaggio Artistico a Rotelle'}
-                      </span>
-                      {associazione.codice_affiliazione_fisr && (
-                        <span
-                          style={{
-                            display: 'inline-block',
-                            backgroundColor: '#f8d7da',
-                            color: '#842029',
-                            border: '1px solid #f5c2c7',
-                            fontSize: '0.72rem',
-                            fontWeight: 600,
-                            padding: '3px 8px',
-                            borderRadius: '4px',
-                            lineHeight: '1.2'
-                          }}
-                        >
-                          Affiliazione FISR: {associazione.codice_affiliazione_fisr}
-                        </span>
-                      )}
-                    </div>
-
                     <h3
                       className="fw-bold mb-1 text-uppercase"
                       style={{
-                        color: '#0d6efd',
+                        color: '#111827',
                         letterSpacing: '0.02em',
-                        fontSize: '1.4rem',
+                        fontSize: '1.35rem',
                         lineHeight: '1.2'
                       }}
                     >
@@ -355,7 +320,7 @@ export const StampaDocumentoModal: React.FC<Props> = ({
 
                     <div className="small text-secondary lh-sm" style={{ fontSize: '0.82rem' }}>
                       <div className="text-dark">
-                        <i className="bi bi-geo-alt me-1 text-danger"></i>
+                        <i className="bi bi-geo-alt me-1"></i>
                         {associazione.indirizzo}, {associazione.cap} {associazione.comune} ({associazione.provincia})
                       </div>
                       <div className="mt-1">
@@ -383,22 +348,21 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                     </div>
                   </div>
 
-                  {/* Riquadro Federazione / Registri Ufficiali (Perfettamente riempito e formattato) */}
-                  <div className="col-5 text-end">
+                  {/* Riquadro Federazione / Registri Ufficiali (Pulito, senza colori per la stampa) */}
+                  <div className="col-5 d-flex justify-content-end">
                     <div
                       style={{
-                        border: '1.5px solid #0d6efd',
-                        borderRadius: '6px',
-                        backgroundColor: '#f8f9fa',
+                        border: '1.5px solid #212529',
+                        borderRadius: '4px',
+                        backgroundColor: '#ffffff',
                         padding: '10px 12px',
                         textAlign: 'center',
-                        display: 'inline-block',
-                        minWidth: '220px',
+                        width: '100%',
+                        maxWidth: '250px',
                         boxSizing: 'border-box'
                       }}
                     >
-                      <div className="fw-bold text-dark mb-1" style={{ fontSize: '0.82rem', letterSpacing: '0.03em' }}>
-                        <i className="bi bi-trophy-fill text-warning me-1"></i>
+                      <div className="fw-bold text-dark mb-1 text-uppercase" style={{ fontSize: '0.82rem', letterSpacing: '0.03em' }}>
                         FEDERAZIONE FISR
                       </div>
                       <div className="text-muted lh-tight" style={{ fontSize: '0.7rem' }}>
@@ -406,22 +370,16 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                       </div>
                       
                       <div
-                        className="mt-1 pt-1 border-top"
-                        style={{
-                          fontSize: '0.74rem',
-                          color: '#0d6efd',
-                          fontWeight: 700
-                        }}
+                        className="mt-1 pt-1 border-top fw-bold text-dark"
+                        style={{ fontSize: '0.74rem' }}
                       >
                         Cod. Società FISR: {associazione.codice_affiliazione_fisr || '3942'}
                       </div>
 
                       <div
-                        className="mt-1 text-dark"
+                        className="mt-1 text-dark border p-1 rounded"
                         style={{
-                          backgroundColor: '#e7f1ff',
-                          borderRadius: '3px',
-                          padding: '2px 6px',
+                          borderColor: '#495057',
                           fontSize: '0.7rem',
                           fontWeight: 600
                         }}
@@ -436,7 +394,7 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                         </div>
                       )}
 
-                      <div className="text-secondary fw-semibold mt-1" style={{ fontSize: '0.72rem' }}>
+                      <div className="text-dark fw-semibold mt-1" style={{ fontSize: '0.72rem' }}>
                         Anno Sportivo {annoAttivo ? annoAttivo.anno : '2024/2025'}
                       </div>
                     </div>
@@ -450,7 +408,7 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                   {/* Titolo e Intestazione Fiscale */}
                   <div
                     style={{
-                      borderBottom: '2px solid #dee2e6',
+                      borderBottom: '2px solid #212529',
                       paddingBottom: '12px',
                       marginBottom: '16px'
                     }}
@@ -460,11 +418,12 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                         <div
                           style={{
                             display: 'inline-block',
-                            backgroundColor: '#0d6efd',
-                            color: '#ffffff',
+                            border: '1.5px solid #212529',
+                            color: '#111827',
+                            backgroundColor: '#ffffff',
                             fontWeight: 700,
                             fontSize: '0.95rem',
-                            padding: '6px 14px',
+                            padding: '5px 12px',
                             borderRadius: '4px',
                             textTransform: 'uppercase',
                             letterSpacing: '0.04em'
@@ -483,8 +442,8 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                       <div className="text-end" style={{ minWidth: '160px' }}>
                         <div className="text-muted small text-uppercase fw-bold">Ricevuta N.</div>
                         <div
-                          className="font-monospace fw-bold"
-                          style={{ fontSize: '1.25rem', color: '#0d6efd' }}
+                          className="font-monospace fw-bold text-dark"
+                          style={{ fontSize: '1.25rem' }}
                         >
                           {pagamento ? pagamento.ricevuta_numero : 'RIC-2024-0001'}
                         </div>
@@ -498,22 +457,22 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                   {/* Quadro Anagrafico Fiscale Completo: Atleta Praticante & Genitore Pagatore (Obbligatorio per il 730) */}
                   <div
                     style={{
-                      border: '1px solid #ced4da',
-                      borderRadius: '6px',
-                      backgroundColor: '#fdfdfe',
+                      border: '1px solid #495057',
+                      borderRadius: '4px',
+                      backgroundColor: '#ffffff',
                       padding: '12px 16px',
                       marginBottom: '16px'
                     }}
                   >
                     <div className="row g-3">
                       {/* Colonna Sinistra: Atleta Praticante */}
-                      <div className="col-6 border-end">
+                      <div className="col-6 border-end" style={{ borderColor: '#495057' }}>
                         <div
                           style={{
                             fontSize: '0.74rem',
                             textTransform: 'uppercase',
                             fontWeight: 700,
-                            color: '#6c757d',
+                            color: '#495057',
                             letterSpacing: '0.04em',
                             marginBottom: '4px'
                           }}
@@ -533,7 +492,7 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                         <div className="small text-muted">
                           Residente in: {persona?.indirizzo}, {persona?.citta}
                         </div>
-                        <div className="small text-primary mt-1">
+                        <div className="small text-dark mt-1">
                           Tessera FISR/Sociale: <strong>{tesserato?.numero_tessera || 'TESS-001'}</strong> ({tesserato?.tipo_tesseramento || 'Atleta'})
                         </div>
                       </div>
@@ -545,7 +504,7 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                             fontSize: '0.74rem',
                             textTransform: 'uppercase',
                             fontWeight: 700,
-                            color: '#6c757d',
+                            color: '#495057',
                             letterSpacing: '0.04em',
                             marginBottom: '4px'
                           }}
@@ -560,7 +519,7 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                             </div>
                             <div className="small text-dark mt-1">
                               <strong>C.F. Pagatore (Detraente):</strong>{' '}
-                              <span className="font-monospace fw-bold text-danger">
+                              <span className="font-monospace fw-bold text-dark">
                                 {persona.tutore_cf || 'NON INSERITO'}
                               </span>
                             </div>
@@ -571,15 +530,13 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                               Telefono: {persona.tutore_telefono || persona.telefono || '—'}
                             </div>
                             <div
-                              className="mt-2 text-dark"
+                              className="mt-2 text-dark border p-1 rounded"
                               style={{
-                                backgroundColor: '#f0f3f6',
-                                borderRadius: '4px',
-                                padding: '3px 6px',
+                                borderColor: '#495057',
                                 fontSize: '0.72rem'
                               }}
                             >
-                              <i className="bi bi-info-circle me-1 text-primary"></i>
+                              <i className="bi bi-info-circle me-1"></i>
                               Spesa detraibile nel Quadro E del Mod. 730 per ragazzi tra i 5 e i 18 anni.
                             </div>
                           </div>
@@ -604,9 +561,9 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                   <div className="mb-3">
                     <table
                       className="table table-bordered align-middle mb-0"
-                      style={{ borderColor: '#dee2e6' }}
+                      style={{ borderColor: '#495057' }}
                     >
-                      <thead style={{ backgroundColor: '#f1f5f9', color: '#334155' }}>
+                      <thead style={{ backgroundColor: '#f8f9fa', color: '#111827' }}>
                         <tr style={{ fontSize: '0.82rem', textTransform: 'uppercase' }}>
                           <th style={{ width: '55%' }}>Descrizione dell'Attività Sportiva Dilettantistica</th>
                           <th className="text-center" style={{ width: '22%' }}>Modalità Pagamento</th>
@@ -633,12 +590,12 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                             <div
                               style={{
                                 display: 'inline-block',
-                                border: '1px solid #0d6efd',
-                                color: '#0d6efd',
-                                backgroundColor: '#f0f7ff',
+                                border: '1px solid #212529',
+                                color: '#111827',
+                                backgroundColor: '#ffffff',
                                 fontWeight: 700,
-                                fontSize: '0.82rem',
-                                padding: '4px 10px',
+                                fontSize: '0.78rem',
+                                padding: '3px 8px',
                                 borderRadius: '4px',
                                 textTransform: 'uppercase'
                               }}
@@ -646,13 +603,13 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                               {pagamento ? pagamento.metodo_pagamento : 'BONIFICO'}
                             </div>
                             {pagamento && (pagamento.metodo_pagamento === 'bonifico' || pagamento.metodo_pagamento === 'pos' || pagamento.metodo_pagamento === 'satispay') ? (
-                              <div className="mt-1 text-success fw-semibold" style={{ fontSize: '0.72rem' }}>
-                                <i className="bi bi-check-circle-fill me-1"></i>
+                              <div className="mt-1 text-dark fw-semibold" style={{ fontSize: '0.72rem' }}>
+                                <i className="bi bi-check-circle me-1"></i>
                                 Metodo Tracciabile (L. 160/2019)
                               </div>
                             ) : (
-                              <div className="mt-1 text-danger fw-semibold" style={{ fontSize: '0.7rem' }}>
-                                <i className="bi bi-exclamation-triangle-fill me-1"></i>
+                              <div className="mt-1 text-dark fw-semibold" style={{ fontSize: '0.7rem' }}>
+                                <i className="bi bi-exclamation-triangle me-1"></i>
                                 Contanti (Non detraibile 730)
                               </div>
                             )}
@@ -671,8 +628,8 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                             Totale Complessivo Quietanzato:
                           </th>
                           <th
-                            className="text-end font-monospace fw-bold"
-                            style={{ fontSize: '1.25rem', color: '#198754' }}
+                            className="text-end font-monospace fw-bold text-dark"
+                            style={{ fontSize: '1.25rem' }}
                           >
                             € {pagamento ? pagamento.importo.toFixed(2) : '80.00'}
                           </th>
@@ -684,9 +641,9 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                   {/* Note Giuridiche, Bollo e Firma per Quietanza */}
                   <div
                     style={{
-                      border: '1px solid #ced4da',
-                      borderRadius: '6px',
-                      backgroundColor: '#f8f9fa',
+                      border: '1px solid #495057',
+                      borderRadius: '4px',
+                      backgroundColor: '#ffffff',
                       padding: '12px 16px',
                       marginBottom: '10px'
                     }}
@@ -725,144 +682,264 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                 </div>
               )}
 
-              {/* CONTENUTO 2: DOMANDA DI ISCRIZIONE & TESSERAMENTO FISR / EPS */}
+              {/* CONTENUTO 2: MODULO UFFICIALE DI ISCRIZIONE, AMMISSIONE A SOCIO E TESSERAMENTO CON INFORMATIVA PRIVACY */}
               {tipoDocumento === 'domanda_iscrizione' && persona && (
                 <div>
-                  <div className="text-center mb-3">
-                    <h4 className="fw-bold text-uppercase mb-1" style={{ letterSpacing: '0.02em' }}>
-                      Domanda di Ammissione a Socio e Tesseramento
+                  {/* Titolo Principale Documento */}
+                  <div className="text-center pb-2 mb-3 border-bottom" style={{ borderColor: '#212529', borderBottomWidth: '2px' }}>
+                    <h4 className="fw-bold text-uppercase mb-1" style={{ letterSpacing: '0.03em', fontSize: '1.25rem', color: '#111827' }}>
+                      Domanda di Iscrizione, Ammissione a Socio e Tesseramento
                     </h4>
-                    <div className="d-flex justify-content-center gap-2">
-                      <span className="badge bg-primary px-3 py-1">
-                        Anno Sportivo {annoAttivo ? annoAttivo.anno : '2024/2025'}
-                      </span>
-                      <span className="badge bg-dark px-3 py-1">
-                        Settore: Pattinaggio Artistico a Rotelle
-                      </span>
-                      <span className="badge bg-danger-subtle text-danger border px-3 py-1">
-                        Federazione FISR / EPS
-                      </span>
+                    <div className="fw-semibold text-uppercase" style={{ fontSize: '0.85rem', color: '#374151' }}>
+                      Anno Sportivo {annoAttivo ? annoAttivo.anno : '2024/2025'} &bull; Disciplina: {associazione.disciplina || 'Pattinaggio Artistico a Rotelle'}
                     </div>
                   </div>
 
-                  <p className="small mb-3">
-                    Al Consiglio Direttivo dell'Associazione Sportiva Dilettantistica <strong>{associazione.denominazione}</strong>:
+                  {/* Indirizzamento formale al Consiglio Direttivo */}
+                  <div className="mb-3 small" style={{ lineHeight: '1.45', fontSize: '0.82rem' }}>
+                    Al Consiglio Direttivo dell'Associazione Sportiva Dilettantistica <strong>{associazione.denominazione}</strong>
                     <br />
-                    Il/La sottoscritto/a richiede l'ammissione a socio e il tesseramento sportivo per la disciplina <strong>Pattinaggio Artistico a Rotelle</strong> con affiliazione alla <strong>Federazione Italiana Sport Rotellistici (FISR)</strong> e agli Enti di Promozione Sportiva a cui l'associazione è affiliata ({epsList.map(e => e.sigla).join(', ') || 'EPS convenzionati'}).
-                  </p>
+                    Con sede in {associazione.indirizzo}, {associazione.cap} {associazione.comune} ({associazione.provincia}) - C.F. {associazione.codice_fiscale}
+                    {associazione.partita_iva && ` - P.IVA ${associazione.partita_iva}`}
+                    <br />
+                    Affiliata FISR (Cod. {associazione.codice_affiliazione_fisr || '3942'}) {epsList.length > 0 && `• Affiliata EPS: ${epsList.map(e => e.sigla).join(', ')}`} • Iscritta al Registro Naz. RASD / Dipartimento per lo Sport ({associazione.registro_rasd || 'RASD-RM-048291'})
+                  </div>
 
-                  {/* Dati Atleta */}
-                  <div className="border rounded p-3 mb-3 bg-light">
-                    <h6 className="fw-bold text-primary mb-2 border-bottom pb-1 d-flex justify-content-between">
-                      <span>1. Dati Anagrafici dell'Atleta</span>
-                      {tesserato && <span className="badge bg-secondary font-monospace">Tessera N. {tesserato.numero_tessera}</span>}
-                    </h6>
-                    <div className="row g-2 small">
-                      <div className="col-md-6">
-                        <strong>Cognome e Nome:</strong> {persona.cognome} {persona.nome}
-                      </div>
-                      <div className="col-md-6">
-                        <strong>Codice Fiscale:</strong> <span className="font-monospace fw-bold">{persona.codice_fiscale}</span>
-                      </div>
-                      <div className="col-md-6">
-                        <strong>Nato/a a:</strong> {persona.luogo_nascita} il{' '}
-                        {new Date(persona.data_nascita).toLocaleDateString('it-IT')}
-                      </div>
-                      <div className="col-md-6">
-                        <strong>Residente in:</strong> {persona.indirizzo}, {persona.citta}
-                      </div>
-                      <div className="col-md-6">
-                        <strong>Recapito Telefonico:</strong> {persona.telefono || '—'}
-                      </div>
-                      <div className="col-md-6">
-                        <strong>Email:</strong> {persona.email || '—'}
+                  {/* SEZIONE 1: DATI ANAGRAFICI DELL'ATLETA / SOCIO */}
+                  <div className="mb-3" style={{ border: '1px solid #374151', borderRadius: '4px' }}>
+                    <div className="px-3 py-1 fw-bold text-uppercase border-bottom" style={{ backgroundColor: '#f3f4f6', fontSize: '0.78rem', borderColor: '#374151' }}>
+                      1. Dati Anagrafici dell'Atleta / Richiedente
+                    </div>
+                    <div className="p-3">
+                      <div className="row g-2" style={{ fontSize: '0.82rem' }}>
+                        <div className="col-7">
+                          <strong>Cognome e Nome:</strong> <span className="fw-bold text-uppercase">{persona.cognome} {persona.nome}</span>
+                        </div>
+                        <div className="col-5">
+                          <strong>Codice Fiscale:</strong> <span className="font-monospace fw-bold">{persona.codice_fiscale}</span>
+                        </div>
+                        <div className="col-7">
+                          <strong>Nato/a a:</strong> {persona.luogo_nascita || '—'} il {persona.data_nascita ? new Date(persona.data_nascita).toLocaleDateString('it-IT') : '—'}
+                        </div>
+                        <div className="col-5">
+                          <strong>Sesso:</strong> {persona.codice_fiscale && persona.codice_fiscale.length >= 11 && parseInt(persona.codice_fiscale.substring(9, 11), 10) > 40 ? 'F' : 'M'} &nbsp;&nbsp;|&nbsp;&nbsp; <strong>Cittadinanza:</strong> Italiana
+                        </div>
+                        <div className="col-7">
+                          <strong>Residenza:</strong> {persona.indirizzo}, {persona.citta}
+                        </div>
+                        <div className="col-5">
+                          <strong>Stato Atleta:</strong> {persona.is_minorenne ? 'Minorenne' : 'Maggiorenne'}
+                        </div>
+                        <div className="col-7">
+                          <strong>Recapito Telefonico:</strong> {persona.telefono || '—'}
+                        </div>
+                        <div className="col-5">
+                          <strong>Email:</strong> {persona.email || '—'}
+                        </div>
+                        <div className="col-12 pt-1 border-top mt-1" style={{ fontSize: '0.78rem' }}>
+                          <strong>Corso / Gruppo di Attività:</strong>{' '}
+                          <span className="fw-bold">
+                            {gruppi.length > 0 ? gruppi.map(g => g.nome_gruppo).join(', ') : 'Pattinaggio Artistico a Rotelle (Avviamento / Corsi Sociali)'}
+                          </span>
+                          {tesserato && <span className="ms-3 text-muted">| N. Tessera: <strong>{tesserato.numero_tessera}</strong></span>}
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Se Minorenne: Genitore / Tutore */}
+                  {/* SEZIONE 2: ESERCENTE RESPONSABILITÀ GENITORIALE (PER MINORENNI) */}
                   {persona.is_minorenne && (
-                    <div className="border rounded p-3 mb-3 bg-light">
-                      <h6 className="fw-bold text-primary mb-2 border-bottom pb-1">
-                        2. Esercente la Responsabilità Genitoriale (per atleta minorenne)
-                      </h6>
-                      <div className="row g-2 small">
-                        <div className="col-md-6">
-                          <strong>Cognome e Nome Genitore:</strong> {persona.tutore_cognome || '—'} {persona.tutore_nome || '—'}
-                        </div>
-                        <div className="col-md-6">
-                          <strong>Codice Fiscale Genitore:</strong> <span className="font-monospace fw-bold">{persona.tutore_cf || '—'}</span>
-                        </div>
-                        <div className="col-md-6">
-                          <strong>Relazione di Parentela:</strong> {persona.tutore_relazione || 'Genitore'}
-                        </div>
-                        <div className="col-md-6">
-                          <strong>Telefono di Contatto:</strong> {persona.tutore_telefono || '—'}
-                        </div>
-                        {persona.tutore_email && (
-                          <div className="col-12">
-                            <strong>Email Genitore:</strong> {persona.tutore_email}
+                    <div className="mb-3" style={{ border: '1px solid #374151', borderRadius: '4px' }}>
+                      <div className="px-3 py-1 fw-bold text-uppercase border-bottom" style={{ backgroundColor: '#f3f4f6', fontSize: '0.78rem', borderColor: '#374151' }}>
+                        2. Dati del Genitore / Tutore Esercente la Responsabilità Genitoriale
+                      </div>
+                      <div className="p-3">
+                        <div className="row g-2" style={{ fontSize: '0.82rem' }}>
+                          <div className="col-7">
+                            <strong>Cognome e Nome Genitore:</strong> <span className="fw-bold text-uppercase">{persona.tutore_cognome || '—'} {persona.tutore_nome || '—'}</span>
                           </div>
-                        )}
+                          <div className="col-5">
+                            <strong>Codice Fiscale:</strong> <span className="font-monospace fw-bold">{persona.tutore_cf || '—'}</span>
+                          </div>
+                          <div className="col-7">
+                            <strong>Grado di Parentela / Ruolo:</strong> {persona.tutore_relazione || 'Genitore / Tutore Legale'}
+                          </div>
+                          <div className="col-5">
+                            <strong>Telefono Cellulare:</strong> {persona.tutore_telefono || persona.telefono || '—'}
+                          </div>
+                          {persona.tutore_email && (
+                            <div className="col-12">
+                              <strong>Email di Contatto:</strong> {persona.tutore_email}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
 
-                  {/* Corsi e Gruppi Pattinaggio */}
-                  <div className="border rounded p-3 mb-3">
-                    <h6 className="fw-bold text-primary mb-1">3. Gruppo di Pattinaggio / Attività Richiesta</h6>
-                    <div className="small">
-                      Corsi di assegnazione:{' '}
-                      <strong className="text-dark">
-                        {gruppi.length > 0 ? gruppi.map((g) => g.nome_gruppo).join(', ') : 'Avviamento Pattinaggio Artistico a Rotelle'}
-                      </strong>
+                  {/* SEZIONE 3: RICHIESTA FORMALE E DICHIARAZIONI ASSOCIATIVE */}
+                  <div className="mb-3" style={{ border: '1px solid #374151', borderRadius: '4px' }}>
+                    <div className="px-3 py-1 fw-bold text-uppercase border-bottom" style={{ backgroundColor: '#f3f4f6', fontSize: '0.78rem', borderColor: '#374151' }}>
+                      {persona.is_minorenne ? '3. Richiesta di Ammissione e Dichiarazioni' : '2. Richiesta di Ammissione e Dichiarazioni'}
                     </div>
-                    {associazione.specialita && associazione.specialita.length > 0 && (
-                      <div className="text-muted mt-1" style={{ fontSize: '0.75rem' }}>
-                        Specialità sociali attive: {associazione.specialita.join(' • ')}
-                      </div>
-                    )}
+                    <div className="p-3" style={{ fontSize: '0.76rem', lineHeight: '1.45', color: '#1f2937' }}>
+                      <p className="mb-2">
+                        Il/La sottoscritto/a, con la presente, <strong>CHIEDE</strong> l'ammissione a socio dell'A.S.D. <strong>{associazione.denominazione}</strong> e il conseguente tesseramento presso la <strong>Federazione Italiana Sport Rotellistici (FISR)</strong> e/o gli Enti di Promozione Sportiva a cui la società è affiliata per l'Anno Sportivo <strong>{annoAttivo ? annoAttivo.anno : '2024/2025'}</strong> per la pratica del Pattinaggio Artistico a Rotelle.
+                      </p>
+                      <p className="mb-2">
+                        A tal fine, sotto la propria personale responsabilità, <strong>DICHIARA E SI IMPEGNA A</strong>:
+                      </p>
+                      <ul className="mb-0 ps-3">
+                        <li className="mb-1">
+                          Aver preso attenta visione dello <strong>Statuto Sociale</strong>, dei regolamenti interni e dei regolamenti federali FISR / EPS / CONI / RASD, di condividerne le finalità istituzionali senza scopo di lucro e di accettarli incondizionatamente in ogni loro parte.
+                        </li>
+                        <li className="mb-1">
+                          Corrispondere puntualmente la quota associativa annua e le quote periodiche deliberate dal Consiglio Direttivo presieduto dal Legale Rappresentante <strong>{associazione.legale_rappresentante}</strong> per la frequenza delle attività e corsi.
+                        </li>
+                        <li className="mb-1">
+                          Consegnare tempestivamente alla segreteria, <strong>prima dell'inizio delle attività in pista</strong>, idoneo <strong>certificato medico</strong> di idoneità all'attività sportiva (non agonistica con ECG o agonistica Tab. B1 per il pattinaggio artistico) in corso di validità, consapevole che in difetto non sarà consentito l'accesso agli allenamenti né la copertura assicurativa sportiva.
+                        </li>
+                        <li className="mb-0">
+                          Rispettare le disposizioni di sicurezza degli impianti sportivi, sollevando la Società e i suoi tecnici/dirigenti da ogni responsabilità per infortuni o danni a persone o cose provocati dal mancato rispetto dei regolamenti o da condotte imprudenti.
+                        </li>
+                      </ul>
+                    </div>
                   </div>
 
-                  {/* Dichiarazioni statutarie, FISR e Privacy */}
-                  <div className="small text-muted mb-3 border p-3 rounded" style={{ fontSize: '0.78rem', lineHeight: '1.45' }}>
-                    <p className="mb-2">
-                      <strong>Dichiarazione Statutaria e Federale:</strong> Il sottoscritto dichiara di aver preso visione dello Statuto Sociale e dei Regolamenti Interni dell'Associazione <strong>{associazione.denominazione}</strong> (C.F. {associazione.codice_fiscale}), nonché dei regolamenti tecnici della <strong>Federazione Italiana Sport Rotellistici (FISR)</strong> e degli Enti di Promozione Sportiva affiliati, di accettarli incondizionatamente e di impegnarsi al versamento delle quote associative e sportive deliberate dal Consiglio Direttivo presieduto dal Legale Rappresentante <strong>{associazione.legale_rappresentante}</strong>.
-                    </p>
-                    <p className="mb-2">
-                      <strong>Certificazione Sanitaria:</strong> Si impegna a consegnare tempestivamente, prima dell'ingresso in pista, il certificato medico di idoneità in corso di validità (non agonistico o agonistico B1 secondo la categoria federale).
-                    </p>
-                    <p className="mb-2">
-                      <strong>Liberatoria Riprese Foto/Video:</strong> Si autorizza l'associazione ad effettuare riprese fotografiche e video durante gli allenamenti in pista, i saggi, le rassegne e le competizioni federali FISR / EPS al solo scopo istituzionale e promozionale societario.
-                    </p>
-                    <p className="mb-0">
-                      <strong>Privacy (GDPR Reg. UE 2016/679):</strong> Si presta il consenso al trattamento dei dati personali e sensibili per tutte le finalità connesse al tesseramento federale FISR/EPS e alla copertura assicurativa sportiva.
-                    </p>
-                  </div>
+                  {/* SEZIONE 4: INFORMATIVA E CONSENSO PRIVACY (GDPR - REGOLAMENTO UE 2016/679) */}
+                  <div className="mb-3" style={{ border: '1px solid #374151', borderRadius: '4px' }}>
+                    <div className="px-3 py-1 fw-bold text-uppercase border-bottom" style={{ backgroundColor: '#f3f4f6', fontSize: '0.78rem', borderColor: '#374151' }}>
+                      Informativa e Consenso al Trattamento dei Dati Personali (GDPR - Reg. UE 2016/679)
+                    </div>
+                    <div className="p-3" style={{ fontSize: '0.74rem', lineHeight: '1.4', color: '#1f2937' }}>
+                      <p className="mb-2">
+                        <strong>Titolare del trattamento:</strong> A.S.D. {associazione.denominazione}, con sede in {associazione.indirizzo}, {associazione.cap} {associazione.comune} ({associazione.provincia}), C.F. {associazione.codice_fiscale}, in persona del Legale Rappresentante pro-tempore {associazione.legale_rappresentante}. I dati personali, anagrafici e sanitari forniti sono trattati nel pieno rispetto dei principi di correttezza, liceità e trasparenza previsti dal Regolamento UE 2016/679 (GDPR).
+                      </p>
 
-                  {/* Firme */}
-                  <div className="row g-4 pt-2">
-                    <div className="col-6">
-                      <div className="small text-muted">Luogo e Data:</div>
-                      <div className="fw-bold">{associazione.comune}, {dataOggi}</div>
-                      <div className="mt-4 pt-3 border-bottom" style={{ width: '220px' }}></div>
-                      <div className="small text-muted">
-                        Firma del Richiedente {persona.is_minorenne ? '(Genitore / Tutore)' : ''}
+                      {/* Box Consensi con Caselle di Spunta Stampabili */}
+                      <div className="border p-2 rounded mb-2" style={{ borderColor: '#6b7280', backgroundColor: '#ffffff' }}>
+                        <div className="d-flex justify-content-between align-items-start mb-1">
+                          <div>
+                            <strong>A) Gestione Associativa, Tesseramento Federale e Copertura Assicurativa (Obbligatorio per legge e statuto):</strong>
+                            <div className="text-secondary" style={{ fontSize: '0.71rem' }}>
+                              Trattamento dei dati anagrafici e fiscali per la gestione del libro soci, tesseramento alla Federazione Italiana Sport Rotellistici (FISR), Enti di Promozione Sportiva (EPS), iscrizione al Registro Nazionale RASD / Dipartimento per lo Sport e attivazione delle polizze infortuni/RCT obbligatorie.
+                            </div>
+                          </div>
+                          <div className="text-nowrap ms-3 fw-bold font-monospace pt-1" style={{ fontSize: '0.78rem' }}>
+                            [ X ] ACCONSENTO &nbsp;&nbsp; [ &nbsp; ] NON ACCONSENTO
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="border p-2 rounded mb-2" style={{ borderColor: '#6b7280', backgroundColor: '#ffffff' }}>
+                        <div className="d-flex justify-content-between align-items-start mb-1">
+                          <div>
+                            <strong>B) Trattamento Dati Sanitari e Certificazione Medica di Idoneità Sportiva (Art. 9 GDPR):</strong>
+                            <div className="text-secondary" style={{ fontSize: '0.71rem' }}>
+                              Trattamento dei dati relativi allo stato di salute e conservazione del certificato medico di idoneità all'attività sportiva per le finalità di tutela sanitaria previste dalla legge.
+                            </div>
+                          </div>
+                          <div className="text-nowrap ms-3 fw-bold font-monospace pt-1" style={{ fontSize: '0.78rem' }}>
+                            [ X ] ACCONSENTO &nbsp;&nbsp; [ &nbsp; ] NON ACCONSENTO
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="border p-2 rounded mb-2" style={{ borderColor: '#6b7280', backgroundColor: '#ffffff' }}>
+                        <div className="d-flex justify-content-between align-items-start mb-1">
+                          <div>
+                            <strong>C) Liberatoria Riprese Fotografiche, Video e Utilizzo Immagini Istituzionali:</strong>
+                            <div className="text-secondary" style={{ fontSize: '0.71rem' }}>
+                              Autorizzazione a riprese foto/video durante allenamenti, saggi, esibizioni, rassegne e gare FISR/EPS per pubblicazione sul sito web, social network ufficiali societari, materiale divulgativo e archivio storico della società, escluso qualsiasi uso commerciale a terzi.
+                            </div>
+                          </div>
+                          <div className="text-nowrap ms-3 fw-bold font-monospace pt-1" style={{ fontSize: '0.78rem' }}>
+                            [ X ] ACCONSENTO &nbsp;&nbsp; [ &nbsp; ] NON ACCONSENTO
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="border p-2 rounded" style={{ borderColor: '#6b7280', backgroundColor: '#ffffff' }}>
+                        <div className="d-flex justify-content-between align-items-start">
+                          <div>
+                            <strong>D) Comunicazioni Istituzionali e Organizzative di Servizio (WhatsApp / SMS / Email):</strong>
+                            <div className="text-secondary" style={{ fontSize: '0.71rem' }}>
+                              Ricezione di comunicazioni di servizio inerenti orari corsi, variazioni pista, convocazioni alle gare, manifestazioni ed eventi societari.
+                            </div>
+                          </div>
+                          <div className="text-nowrap ms-3 fw-bold font-monospace pt-1" style={{ fontSize: '0.78rem' }}>
+                            [ X ] ACCONSENTO &nbsp;&nbsp; [ &nbsp; ] NON ACCONSENTO
+                          </div>
+                        </div>
                       </div>
                     </div>
+                  </div>
 
-                    <div className="col-6 text-end">
-                      <div className="small text-muted">Per Accettazione del Consiglio Direttivo:</div>
-                      <div className="fw-bold">{associazione.legale_rappresentante}</div>
-                      <div className="small text-muted">Il Legale Rappresentante / Presidente</div>
-                      <div className="mt-4 pt-3 border-bottom d-inline-block" style={{ width: '220px' }}></div>
-                      <div className="small text-muted">Timbro e Firma</div>
+                  {/* SEZIONE 5: QUADRO DELLE FIRME */}
+                  <div className="mb-3" style={{ border: '1px solid #374151', borderRadius: '4px' }}>
+                    <div className="px-3 py-1 fw-bold text-uppercase border-bottom" style={{ backgroundColor: '#f3f4f6', fontSize: '0.78rem', borderColor: '#374151' }}>
+                      Sottoscrizione e Firme
+                    </div>
+                    <div className="p-3">
+                      <div className="row g-3">
+                        <div className="col-4">
+                          <div className="small text-muted">Luogo e Data:</div>
+                          <div className="fw-bold mt-1" style={{ fontSize: '0.85rem' }}>{associazione.comune}, {dataOggi}</div>
+                        </div>
+
+                        <div className="col-4 text-center">
+                          <div className="small text-muted">Firma Richiesta Iscrizione e Statuto:</div>
+                          <div className="mt-4 pt-3 border-bottom mx-auto" style={{ width: '85%', borderColor: '#111827' }}></div>
+                          <div className="small text-muted mt-1" style={{ fontSize: '0.7rem' }}>
+                            {persona.is_minorenne ? 'Firma del Genitore / Tutore Legale' : 'Firma del Socio / Atleta'}
+                          </div>
+                        </div>
+
+                        <div className="col-4 text-center">
+                          <div className="small text-muted">Firma Consensi Privacy e Foto (GDPR):</div>
+                          <div className="mt-4 pt-3 border-bottom mx-auto" style={{ width: '85%', borderColor: '#111827' }}></div>
+                          <div className="small text-muted mt-1" style={{ fontSize: '0.7rem' }}>
+                            {persona.is_minorenne ? 'Firma del Genitore / Tutore Legale' : 'Firma del Socio / Atleta'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SEZIONE 6: PARTE RISERVATA AL CONSIGLIO DIRETTIVO DELL'ASSOCIAZIONE */}
+                  <div style={{ border: '1px solid #374151', borderRadius: '4px' }}>
+                    <div className="px-3 py-1 fw-bold text-uppercase border-bottom" style={{ backgroundColor: '#f3f4f6', fontSize: '0.78rem', borderColor: '#374151' }}>
+                      Spazio Riservato al Consiglio Direttivo dell'Associazione
+                    </div>
+                    <div className="p-3">
+                      <div className="row align-items-center" style={{ fontSize: '0.78rem' }}>
+                        <div className="col-4">
+                          <div>Domanda ricevuta in data: <strong>{dataOggi}</strong></div>
+                          <div className="mt-1">
+                            Esito Delibera: <strong>[ X ] ACCOLTA &nbsp;&nbsp; [ &nbsp; ] RESPINTA</strong>
+                          </div>
+                          <div className="mt-1">
+                            Verbale del C.D. n.: <strong>______ / {new Date().getFullYear()}</strong>
+                          </div>
+                        </div>
+                        <div className="col-4">
+                          <div>N. Tessera FISR/EPS: <strong>{tesserato?.numero_tessera || '________________'}</strong></div>
+                          <div className="mt-1">Anno Sportivo: <strong>{annoAttivo ? annoAttivo.anno : '2024/2025'}</strong></div>
+                          <div className="mt-1">Certificato Medico: <strong>[ &nbsp; ] Presentato &nbsp; [ &nbsp; ] In attesa</strong></div>
+                        </div>
+                        <div className="col-4 text-end">
+                          <div className="small text-muted">Il Presidente / Legale Rappresentante:</div>
+                          <div className="fw-bold text-dark mt-1">{associazione.legale_rappresentante}</div>
+                          <div className="mt-3 pt-3 border-bottom d-inline-block" style={{ width: '180px', borderColor: '#111827' }}></div>
+                          <div className="small text-muted mt-1" style={{ fontSize: '0.7rem' }}>Timbro A.S.D. e Firma</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* CONTENUTO 3: RICHIESTA CERTIFICATO MEDICO SPORTIVO */}
+              {/* CONTENUTO 3: RICHIESTA CERTIFICATO MEDICO SPORTIVO (Monocromatico, senza riquadri colorati) */}
               {tipoDocumento === 'richiesta_certificato' && persona && (
                 <div>
                   <div className="row mb-4">
@@ -873,7 +950,7 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                       <div className="small text-muted">Data di emissione: <strong>{dataOggi}</strong></div>
                     </div>
                     <div className="col-5 text-end">
-                      <div className="border p-2 rounded bg-light text-start small">
+                      <div className="border p-2 rounded bg-white text-start small" style={{ borderColor: '#495057' }}>
                         <strong>Spett.le Medico Curante:</strong>
                         <div>Al Medico di Medicina Generale /</div>
                         <div>Al Pediatra di Libera Scelta /</div>
@@ -883,12 +960,12 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                   </div>
 
                   <div className="text-center my-4">
-                    <h4 className="fw-bold text-uppercase border-bottom pb-2">
+                    <h4 className="fw-bold text-uppercase border-bottom pb-2" style={{ borderColor: '#212529', color: '#111827' }}>
                       Richiesta di Certificato Medico per Attività Sportiva
                     </h4>
-                    <span className="badge bg-primary px-3 py-1">
+                    <div className="d-inline-block border border-dark px-3 py-1 rounded small fw-bold mt-1">
                       Disciplina: Pattinaggio Artistico a Rotelle (FISR / EPS)
-                    </span>
+                    </div>
                   </div>
 
                   <div className="my-4 small lh-lg">
@@ -901,8 +978,8 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                       <strong>{associazione.legale_rappresentante}</strong>:
                     </p>
 
-                    <div className="p-3 bg-light border rounded my-3">
-                      <div className="fs-6 fw-bold text-primary mb-2">ATTESTA CHE:</div>
+                    <div className="p-3 bg-white border rounded my-3" style={{ borderColor: '#495057' }}>
+                      <div className="fs-6 fw-bold text-dark mb-2">ATTESTA CHE:</div>
                       <div>
                         L'atleta <strong>{persona.cognome} {persona.nome}</strong>,
                         {persona.is_minorenne && persona.tutore_nome && (
@@ -920,7 +997,7 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                       </div>
                       <div className="fw-semibold">
                         &bull; Pratica la disciplina:{' '}
-                        <span className="text-primary">
+                        <span className="text-dark fw-bold">
                           {gruppi.length > 0 ? gruppi.map((g) => g.nome_gruppo).join(', ') : 'Pattinaggio Artistico a Rotelle (Corsi e Allenamenti)'}
                         </span>.
                       </div>
@@ -934,16 +1011,16 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                       <div className="col-6">
                         <div
                           style={{
-                            border: '2px solid #0d6efd',
-                            borderRadius: '6px',
-                            backgroundColor: '#f0f7ff',
+                            border: '1.5px solid #212529',
+                            borderRadius: '4px',
+                            backgroundColor: '#ffffff',
                             padding: '12px 14px',
                             textAlign: 'center',
                             height: '100%',
                             boxSizing: 'border-box'
                           }}
                         >
-                          <div className="fw-bold mb-1" style={{ color: '#0a58ca', fontSize: '0.92rem' }}>
+                          <div className="fw-bold mb-1 text-dark text-uppercase" style={{ fontSize: '0.92rem' }}>
                             CERTIFICATO NON AGONISTICO
                           </div>
                           <div className="text-secondary small" style={{ fontSize: '0.75rem' }}>
@@ -958,16 +1035,16 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                       <div className="col-6">
                         <div
                           style={{
-                            border: '2px solid #dc3545',
-                            borderRadius: '6px',
-                            backgroundColor: '#fff5f5',
+                            border: '1.5px solid #212529',
+                            borderRadius: '4px',
+                            backgroundColor: '#ffffff',
                             padding: '12px 14px',
                             textAlign: 'center',
                             height: '100%',
                             boxSizing: 'border-box'
                           }}
                         >
-                          <div className="fw-bold mb-1" style={{ color: '#b02a37', fontSize: '0.92rem' }}>
+                          <div className="fw-bold mb-1 text-dark text-uppercase" style={{ fontSize: '0.92rem' }}>
                             CERTIFICATO AGONISTICO FISR (TAB. B1)
                           </div>
                           <div className="text-secondary small" style={{ fontSize: '0.75rem' }}>
@@ -986,14 +1063,14 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                   </div>
 
                   {/* Firma e Timbro */}
-                  <div className="row g-4 pt-4 border-top mt-5">
+                  <div className="row g-4 pt-4 border-top mt-5" style={{ borderColor: '#495057' }}>
                     <div className="col-6">
                       <div className="small text-muted">Luogo e Data:</div>
                       <div className="fw-bold">{associazione.comune}, {dataOggi}</div>
                       <div className="mt-3 small text-muted">Timbro Associazione Sportiva:</div>
                       <div
                         className="border border-dashed rounded p-3 text-center text-muted small mt-1"
-                        style={{ height: '70px' }}
+                        style={{ height: '70px', borderColor: '#495057' }}
                       >
                         [ Timbro {associazione.denominazione} ]
                       </div>
@@ -1003,7 +1080,7 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                       <div className="small text-muted">Il Legale Rappresentante:</div>
                       <div className="fs-6 fw-bold text-dark mt-1">{associazione.legale_rappresentante}</div>
                       <div className="small text-muted">Presidente {associazione.denominazione}</div>
-                      <div className="mt-4 pt-3 border-bottom d-inline-block" style={{ width: '220px' }}></div>
+                      <div className="mt-4 pt-3 border-bottom d-inline-block" style={{ width: '220px', borderColor: '#212529' }}></div>
                       <div className="small text-muted">Firma</div>
                     </div>
                   </div>

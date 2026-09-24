@@ -73,6 +73,16 @@ export const Sidebar: React.FC<Props> = ({
         ) : null
     },
     {
+      id: 'previsioni',
+      label: 'Previsione & Budget',
+      icon: 'bi-graph-up-arrow',
+      badge: (
+        <span className="badge bg-success-subtle text-success border border-success-subtle px-1 py-0 ms-auto" style={{ fontSize: '0.7rem' }}>
+          Bilancio
+        </span>
+      )
+    },
+    {
       id: 'pagamenti',
       label: 'Pagamenti',
       icon: 'bi-wallet2',

@@ -8,7 +8,8 @@ import {
   Quota,
   Pagamento,
   Utente,
-  TesseratoFull
+  TesseratoFull,
+  SpesaPrevisionale
 } from '../types';
 import {
   INITIAL_ASSOCIAZIONE,
@@ -19,7 +20,8 @@ import {
   INITIAL_GRUPPI_TESSERATI,
   INITIAL_QUOTE,
   INITIAL_PAGAMENTI,
-  INITIAL_UTENTI
+  INITIAL_UTENTI,
+  INITIAL_SPESE_PREVISIONALI
 } from '../data/mockData';
 
 const STORAGE_KEYS = {
@@ -33,6 +35,7 @@ const STORAGE_KEYS = {
   PAGAMENTI: 'sport_gestionale_pagamenti',
   UTENTI: 'sport_gestionale_utenti',
   CURRENT_USER: 'sport_gestionale_current_user',
+  SPESE: 'sport_gestionale_spese_previsionali'
 };
 
 // Carica o inizializza
@@ -67,6 +70,7 @@ export function resetAllData(): void {
   localStorage.removeItem(STORAGE_KEYS.QUOTE);
   localStorage.removeItem(STORAGE_KEYS.PAGAMENTI);
   localStorage.removeItem(STORAGE_KEYS.UTENTI);
+  localStorage.removeItem(STORAGE_KEYS.SPESE);
   window.location.reload();
 }
 
@@ -81,6 +85,7 @@ export interface AppState {
   quote: Quota[];
   pagamenti: Pagamento[];
   utenti: Utente[];
+  spese: SpesaPrevisionale[];
 }
 
 export function getInitialState(): AppState {
@@ -93,7 +98,8 @@ export function getInitialState(): AppState {
     gruppi_tesserati: getGruppiTesserati(),
     quote: getQuote(),
     pagamenti: getPagamenti(),
-    utenti: getUtenti()
+    utenti: getUtenti(),
+    spese: getSpese()
   };
 }
 
@@ -107,6 +113,7 @@ export function saveState(state: AppState): void {
   saveToStorage(STORAGE_KEYS.QUOTE, state.quote);
   saveToStorage(STORAGE_KEYS.PAGAMENTI, state.pagamenti);
   saveToStorage(STORAGE_KEYS.UTENTI, state.utenti);
+  saveToStorage(STORAGE_KEYS.SPESE, state.spese);
 }
 
 // Data Getters
@@ -173,7 +180,27 @@ export function getGruppiTesserati(): GruppoTesserato[] {
 }
 
 export function getQuote(): Quota[] {
-  return loadOrInit<Quota[]>(STORAGE_KEYS.QUOTE, INITIAL_QUOTE);
+  const current = loadOrInit<Quota[]>(STORAGE_KEYS.QUOTE, INITIAL_QUOTE);
+  if (current.length < INITIAL_QUOTE.length) {
+    // Integra le quote di esempio mancanti per una previsione mensile completa
+    const merged = [...current];
+    for (const initQ of INITIAL_QUOTE) {
+      if (!merged.some((q) => q.id === initQ.id || (q.tesserato_id === initQ.tesserato_id && q.mese_riferimento === initQ.mese_riferimento && q.gruppo_id === initQ.gruppo_id))) {
+        merged.push(initQ);
+      }
+    }
+    saveToStorage(STORAGE_KEYS.QUOTE, merged);
+    return merged;
+  }
+  return current;
+}
+
+export function getSpese(): SpesaPrevisionale[] {
+  return loadOrInit<SpesaPrevisionale[]>(STORAGE_KEYS.SPESE, INITIAL_SPESE_PREVISIONALI);
+}
+
+export function saveSpese(spese: SpesaPrevisionale[]): void {
+  saveToStorage(STORAGE_KEYS.SPESE, spese);
 }
 
 export function getPagamenti(): Pagamento[] {
@@ -385,3 +412,28 @@ export function getTesseratiFull(
     };
   });
 }
+
+// Sincronizza lo scadenziario per tutti gli atleti iscritti ai gruppi
+export function sincronizzaQuoteAnnualiPerTutti(
+  gruppiTesserati: GruppoTesserato[],
+  gruppi: Gruppo[],
+  quoteAttuali: Quota[]
+): { quoteAggiornate: Quota[]; numeroNuoveQuote: number } {
+  let quote = [...quoteAttuali];
+  let totGenerate = 0;
+
+  for (const gt of gruppiTesserati) {
+    const { nuoveQuote, numeroGenerate } = generaQuoteAutomatichePerTesserato(
+      gt.tesserato_id,
+      gt.gruppo_id,
+      quote,
+      gruppi
+    );
+    quote = nuoveQuote;
+    totGenerate += numeroGenerate;
+  }
+
+  saveToStorage(STORAGE_KEYS.QUOTE, quote);
+  return { quoteAggiornate: quote, numeroNuoveQuote: totGenerate };
+}
+

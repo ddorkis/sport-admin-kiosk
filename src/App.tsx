@@ -7,13 +7,15 @@ import {
   Quota,
   Pagamento,
   Utente,
-  Anno
+  Anno,
+  SpesaPrevisionale
 } from './types';
 import {
   getInitialState,
   saveState,
   generaQuotePerIscrizione,
-  isQuotaScaduta
+  isQuotaScaduta,
+  sincronizzaQuoteAnnualiPerTutti
 } from './utils/storage';
 
 // Viste Kiosk e Gestionale
@@ -24,6 +26,7 @@ import { PersoneView } from './components/gestionale/PersoneView';
 import { TesseratiView } from './components/gestionale/TesseratiView';
 import { GruppiView } from './components/gestionale/GruppiView';
 import { QuoteView } from './components/gestionale/QuoteView';
+import { PrevisioneSpeseView } from './components/gestionale/PrevisioneSpeseView';
 import { PagamentiView } from './components/gestionale/PagamentiView';
 import { UtentiView } from './components/gestionale/UtentiView';
 import { AssociazioneView } from './components/gestionale/AssociazioneView';
@@ -500,6 +503,44 @@ export default function App() {
     showToast('Quota annullata con successo!');
   };
 
+  // Gestione Spese Previsionali & Bilancio
+  const handleSaveSpesa = (spesaData: Omit<SpesaPrevisionale, 'id'>, idToEdit?: number) => {
+    setData((prev) => {
+      let nuoveSpese: SpesaPrevisionale[];
+      const listaSpese = prev.spese || [];
+      if (idToEdit) {
+        nuoveSpese = listaSpese.map((s) => (s.id === idToEdit ? { ...spesaData, id: idToEdit } : s));
+      } else {
+        const nextId = listaSpese.reduce((max, s) => Math.max(max, s.id), 0) + 1;
+        nuoveSpese = [...listaSpese, { ...spesaData, id: nextId }];
+      }
+      return { ...prev, spese: nuoveSpese };
+    });
+    showToast(idToEdit ? 'Voce di spesa modificata con successo!' : 'Nuova voce di spesa aggiunta al budget!');
+  };
+
+  const handleDeleteSpesa = (id: number) => {
+    setData((prev) => ({
+      ...prev,
+      spese: (prev.spese || []).filter((s) => s.id !== id)
+    }));
+    showToast('Voce di spesa rimossa dal budget.');
+  };
+
+  const handleSincronizzaQuote = () => {
+    const { quoteAggiornate, numeroNuoveQuote } = sincronizzaQuoteAnnualiPerTutti(
+      data.gruppi_tesserati,
+      data.gruppi,
+      data.quote
+    );
+    setData((prev) => ({ ...prev, quote: quoteAggiornate }));
+    if (numeroNuoveQuote > 0) {
+      showToast(`Scadenziario sincronizzato: generate ${numeroNuoveQuote} nuove rate mensili!`);
+    } else {
+      showToast('Tutte le quote per i corsisti attivi sono già calcolate e sincronizzate.');
+    }
+  };
+
   // Gestione Utenti
   const handleToggleKioskFlag = (userId: number) => {
     setData((prev) => ({
@@ -793,6 +834,26 @@ export default function App() {
                 }}
                 onAnnullaQuota={(q) => {
                   setQuotaToAnnullare(q);
+                }}
+                onNavigateToBilancio={() => {
+                  setActiveTab('previsioni');
+                }}
+                onSincronizzaQuote={handleSincronizzaQuote}
+              />
+            )}
+
+            {activeTab === 'previsioni' && (
+              <PrevisioneSpeseView
+                annoAttivo={annoAttivo}
+                quote={data.quote}
+                gruppi={data.gruppi}
+                spese={data.spese || []}
+                associazione={data.associazione}
+                onSaveSpesa={handleSaveSpesa}
+                onDeleteSpesa={handleDeleteSpesa}
+                onNavigateTab={(tab, filter) => {
+                  if (filter) setQuoteFilter(filter);
+                  setActiveTab(tab);
                 }}
               />
             )}

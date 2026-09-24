@@ -1,4 +1,4 @@
-import { Associazione, Persona, Anno, Tesserato, Gruppo, GruppoTesserato, Quota, Pagamento, Utente } from '../types';
+import { Associazione, Persona, Anno, Tesserato, Gruppo, GruppoTesserato, Quota, Pagamento, Utente, SpesaPrevisionale } from '../types';
 
 export const INITIAL_ASSOCIAZIONE: Associazione = {
   denominazione: 'A.S.D. Pattinaggio Artistico Aurora',
@@ -406,7 +406,138 @@ export const INITIAL_QUOTE: Quota[] = [
     data_scadenza: '2024-11-10',
     stato: 'da_pagare',
     mese_riferimento: '2024-11'
-  }
+  },
+  {
+    id: 11,
+    tesserato_id: 3,
+    gruppo_id: 2,
+    causale: 'Quota Dicembre 2024 - Solo Dance FISR',
+    importo: 75.00,
+    importo_pagato: 0.00,
+    data_scadenza: '2024-12-10',
+    stato: 'da_pagare',
+    mese_riferimento: '2024-12'
+  },
+
+  // Giulia Romano (Tesserato 4 - Gruppo Show, 65€/mese)
+  {
+    id: 12,
+    tesserato_id: 4,
+    gruppo_id: 4,
+    causale: 'Quota Ottobre 2024 - Gruppo Show & Precision',
+    importo: 65.00,
+    importo_pagato: 65.00,
+    data_scadenza: '2024-10-15',
+    stato: 'pagata',
+    mese_riferimento: '2024-10'
+  },
+  {
+    id: 13,
+    tesserato_id: 4,
+    gruppo_id: 4,
+    causale: 'Quota Novembre 2024 - Gruppo Show & Precision',
+    importo: 65.00,
+    importo_pagato: 65.00,
+    data_scadenza: '2024-11-15',
+    stato: 'pagata',
+    mese_riferimento: '2024-11'
+  },
+  {
+    id: 14,
+    tesserato_id: 4,
+    gruppo_id: 4,
+    causale: 'Quota Dicembre 2024 - Gruppo Show & Precision',
+    importo: 65.00,
+    importo_pagato: 0.00,
+    data_scadenza: '2024-12-15',
+    stato: 'da_pagare',
+    mese_riferimento: '2024-12'
+  },
+
+  // Matteo Colombo (Tesserato 5 - Solo Dance FISR, 75€/mese)
+  {
+    id: 15,
+    tesserato_id: 5,
+    gruppo_id: 2,
+    causale: 'Quota Settembre 2024 - Solo Dance FISR',
+    importo: 75.00,
+    importo_pagato: 75.00,
+    data_scadenza: '2024-09-10',
+    stato: 'pagata',
+    mese_riferimento: '2024-09'
+  },
+  {
+    id: 16,
+    tesserato_id: 5,
+    gruppo_id: 2,
+    causale: 'Quota Ottobre 2024 - Solo Dance FISR',
+    importo: 75.00,
+    importo_pagato: 75.00,
+    data_scadenza: '2024-10-10',
+    stato: 'pagata',
+    mese_riferimento: '2024-10'
+  },
+  {
+    id: 17,
+    tesserato_id: 5,
+    gruppo_id: 2,
+    causale: 'Quota Novembre 2024 - Solo Dance FISR',
+    importo: 75.00,
+    importo_pagato: 0.00,
+    data_scadenza: '2024-11-10',
+    stato: 'da_pagare',
+    mese_riferimento: '2024-11'
+  },
+  {
+    id: 18,
+    tesserato_id: 5,
+    gruppo_id: 2,
+    causale: 'Quota Dicembre 2024 - Solo Dance FISR',
+    importo: 75.00,
+    importo_pagato: 0.00,
+    data_scadenza: '2024-12-10',
+    stato: 'da_pagare',
+    mese_riferimento: '2024-12'
+  },
+
+  // Quote Future 2025 (Gennaio - Maggio) per Previsioni Annuali
+  // Gennaio 2025
+  { id: 19, tesserato_id: 1, gruppo_id: 3, causale: 'Quota Gennaio 2025 - Agonismo Singolo FISR', importo: 80.00, importo_pagato: 0, data_scadenza: '2025-01-10', stato: 'da_pagare', mese_riferimento: '2025-01' },
+  { id: 20, tesserato_id: 2, gruppo_id: 1, causale: 'Quota Gennaio 2025 - Avviamento Pattinaggio', importo: 50.00, importo_pagato: 0, data_scadenza: '2025-01-10', stato: 'da_pagare', mese_riferimento: '2025-01' },
+  { id: 21, tesserato_id: 3, gruppo_id: 2, causale: 'Quota Gennaio 2025 - Solo Dance FISR', importo: 75.00, importo_pagato: 0, data_scadenza: '2025-01-10', stato: 'da_pagare', mese_riferimento: '2025-01' },
+  { id: 22, tesserato_id: 4, gruppo_id: 4, causale: 'Quota Gennaio 2025 - Gruppo Show & Precision', importo: 65.00, importo_pagato: 0, data_scadenza: '2025-01-15', stato: 'da_pagare', mese_riferimento: '2025-01' },
+  { id: 23, tesserato_id: 5, gruppo_id: 2, causale: 'Quota Gennaio 2025 - Solo Dance FISR', importo: 75.00, importo_pagato: 0, data_scadenza: '2025-01-10', stato: 'da_pagare', mese_riferimento: '2025-01' },
+
+  // Febbraio 2025
+  { id: 24, tesserato_id: 1, gruppo_id: 3, causale: 'Quota Febbraio 2025 - Agonismo Singolo FISR', importo: 80.00, importo_pagato: 0, data_scadenza: '2025-02-10', stato: 'da_pagare', mese_riferimento: '2025-02' },
+  { id: 25, tesserato_id: 2, gruppo_id: 1, causale: 'Quota Febbraio 2025 - Avviamento Pattinaggio', importo: 50.00, importo_pagato: 0, data_scadenza: '2025-02-10', stato: 'da_pagare', mese_riferimento: '2025-02' },
+  { id: 26, tesserato_id: 3, gruppo_id: 2, causale: 'Quota Febbraio 2025 - Solo Dance FISR', importo: 75.00, importo_pagato: 0, data_scadenza: '2025-02-10', stato: 'da_pagare', mese_riferimento: '2025-02' },
+  { id: 27, tesserato_id: 4, gruppo_id: 4, causale: 'Quota Febbraio 2025 - Gruppo Show & Precision', importo: 65.00, importo_pagato: 0, data_scadenza: '2025-02-15', stato: 'da_pagare', mese_riferimento: '2025-02' },
+  { id: 28, tesserato_id: 5, gruppo_id: 2, causale: 'Quota Febbraio 2025 - Solo Dance FISR', importo: 75.00, importo_pagato: 0, data_scadenza: '2025-02-10', stato: 'da_pagare', mese_riferimento: '2025-02' },
+
+  // Marzo 2025
+  { id: 29, tesserato_id: 1, gruppo_id: 3, causale: 'Quota Marzo 2025 - Agonismo Singolo FISR', importo: 80.00, importo_pagato: 0, data_scadenza: '2025-03-10', stato: 'da_pagare', mese_riferimento: '2025-03' },
+  { id: 30, tesserato_id: 2, gruppo_id: 1, causale: 'Quota Marzo 2025 - Avviamento Pattinaggio', importo: 50.00, importo_pagato: 0, data_scadenza: '2025-03-10', stato: 'da_pagare', mese_riferimento: '2025-03' },
+  { id: 31, tesserato_id: 3, gruppo_id: 2, causale: 'Quota Marzo 2025 - Solo Dance FISR', importo: 75.00, importo_pagato: 0, data_scadenza: '2025-03-10', stato: 'da_pagare', mese_riferimento: '2025-03' },
+  { id: 32, tesserato_id: 4, gruppo_id: 4, causale: 'Quota Marzo 2025 - Gruppo Show & Precision', importo: 65.00, importo_pagato: 0, data_scadenza: '2025-03-15', stato: 'da_pagare', mese_riferimento: '2025-03' },
+  { id: 33, tesserato_id: 5, gruppo_id: 2, causale: 'Quota Marzo 2025 - Solo Dance FISR', importo: 75.00, importo_pagato: 0, data_scadenza: '2025-03-10', stato: 'da_pagare', mese_riferimento: '2025-03' },
+
+  // Aprile 2025
+  { id: 34, tesserato_id: 1, gruppo_id: 3, causale: 'Quota Aprile 2025 - Agonismo Singolo FISR', importo: 80.00, importo_pagato: 0, data_scadenza: '2025-04-10', stato: 'da_pagare', mese_riferimento: '2025-04' },
+  { id: 35, tesserato_id: 2, gruppo_id: 1, causale: 'Quota Aprile 2025 - Avviamento Pattinaggio', importo: 50.00, importo_pagato: 0, data_scadenza: '2025-04-10', stato: 'da_pagare', mese_riferimento: '2025-04' },
+  { id: 36, tesserato_id: 3, gruppo_id: 2, causale: 'Quota Aprile 2025 - Solo Dance FISR', importo: 75.00, importo_pagato: 0, data_scadenza: '2025-04-10', stato: 'da_pagare', mese_riferimento: '2025-04' },
+  { id: 37, tesserato_id: 4, gruppo_id: 4, causale: 'Quota Aprile 2025 - Gruppo Show & Precision', importo: 65.00, importo_pagato: 0, data_scadenza: '2025-04-15', stato: 'da_pagare', mese_riferimento: '2025-04' },
+  { id: 38, tesserato_id: 5, gruppo_id: 2, causale: 'Quota Aprile 2025 - Solo Dance FISR', importo: 75.00, importo_pagato: 0, data_scadenza: '2025-04-10', stato: 'da_pagare', mese_riferimento: '2025-04' },
+
+  // Maggio 2025
+  { id: 39, tesserato_id: 1, gruppo_id: 3, causale: 'Quota Maggio 2025 - Agonismo Singolo FISR', importo: 80.00, importo_pagato: 0, data_scadenza: '2025-05-10', stato: 'da_pagare', mese_riferimento: '2025-05' },
+  { id: 40, tesserato_id: 2, gruppo_id: 1, causale: 'Quota Maggio 2025 - Avviamento Pattinaggio', importo: 50.00, importo_pagato: 0, data_scadenza: '2025-05-10', stato: 'da_pagare', mese_riferimento: '2025-05' },
+  { id: 41, tesserato_id: 3, gruppo_id: 2, causale: 'Quota Maggio 2025 - Solo Dance FISR', importo: 75.00, importo_pagato: 0, data_scadenza: '2025-05-10', stato: 'da_pagare', mese_riferimento: '2025-05' },
+  { id: 42, tesserato_id: 4, gruppo_id: 4, causale: 'Quota Maggio 2025 - Gruppo Show & Precision', importo: 65.00, importo_pagato: 0, data_scadenza: '2025-05-15', stato: 'da_pagare', mese_riferimento: '2025-05' },
+  { id: 43, tesserato_id: 5, gruppo_id: 2, causale: 'Quota Maggio 2025 - Solo Dance FISR', importo: 75.00, importo_pagato: 0, data_scadenza: '2025-05-10', stato: 'da_pagare', mese_riferimento: '2025-05' },
+
+  // Giugno 2025 (Solo Gruppo Show fino al 15/06)
+  { id: 44, tesserato_id: 4, gruppo_id: 4, causale: 'Quota Giugno 2025 - Gruppo Show & Precision', importo: 65.00, importo_pagato: 0, data_scadenza: '2025-06-15', stato: 'da_pagare', mese_riferimento: '2025-06' }
 ];
 
 export const INITIAL_PAGAMENTI: Pagamento[] = [
@@ -513,3 +644,67 @@ export const INITIAL_UTENTI: Utente[] = [
     password: '123'
   }
 ];
+
+export const INITIAL_SPESE_PREVISIONALI: SpesaPrevisionale[] = [
+  {
+    id: 1,
+    anno_id: 1,
+    titolo: 'Canone Affitto Pista di Pattinaggio Comunale',
+    categoria: 'Affitto Impianti / Pista',
+    importo_mensile: 180.00,
+    mesi: ['2024-09', '2024-10', '2024-11', '2024-12', '2025-01', '2025-02', '2025-03', '2025-04', '2025-05'],
+    ricorrente: true,
+    note: 'Convenzione comunale per uso pista e spogliatoi 4 giorni a settimana'
+  },
+  {
+    id: 2,
+    anno_id: 1,
+    titolo: 'Compensi Tecnici & Allenatori Federali (FISR)',
+    categoria: 'Compensi Tecnici / Allenatori',
+    importo_mensile: 220.00,
+    mesi: ['2024-09', '2024-10', '2024-11', '2024-12', '2025-01', '2025-02', '2025-03', '2025-04', '2025-05'],
+    ricorrente: true,
+    note: 'Rimborsi forfettari istruttori avviamento, solo dance e singolo agonismo'
+  },
+  {
+    id: 3,
+    anno_id: 1,
+    titolo: 'Riaffiliazione Societaria FISR & EPS (UISP/AICS)',
+    categoria: 'Tesseramenti & Affiliazioni (FISR/EPS)',
+    importo_mensile: 150.00,
+    mesi: ['2024-09'],
+    ricorrente: false,
+    note: 'Quota di riaffiliazione annuale all\'inizio della stagione sportiva'
+  },
+  {
+    id: 4,
+    anno_id: 1,
+    titolo: 'Polizza Assicurativa RCT Società e Infortuni Atleti',
+    categoria: 'Assicurazioni',
+    importo_mensile: 120.00,
+    mesi: ['2024-10'],
+    ricorrente: false,
+    note: 'Copertura assicurativa annuale responsabilità civile verso terzi'
+  },
+  {
+    id: 5,
+    anno_id: 1,
+    titolo: 'Materiale Sportivo & Ricambi Rotelle (Coni, Nastri, Freni)',
+    categoria: 'Materiale Sportivo & Divise',
+    importo_mensile: 85.00,
+    mesi: ['2024-11', '2025-02'],
+    ricorrente: false,
+    note: 'Materiale di ricambio pista e presidi per percorsi didattici'
+  },
+  {
+    id: 6,
+    anno_id: 1,
+    titolo: 'Assistenza Contabile e Adempimenti Riforma Sport / RASD',
+    categoria: 'Amministrazione & Commercialista',
+    importo_mensile: 60.00,
+    mesi: ['2024-09', '2024-10', '2024-11', '2024-12', '2025-01', '2025-02', '2025-03', '2025-04', '2025-05', '2025-06'],
+    ricorrente: true,
+    note: 'Tenuta contabilità semplificata ASD e gestione registro nazionale RASD'
+  }
+];
+

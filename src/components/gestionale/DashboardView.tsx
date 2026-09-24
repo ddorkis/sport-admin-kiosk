@@ -33,6 +33,28 @@ export const DashboardView: React.FC<Props> = ({
 
   const minorenniCount = persone.filter((p) => p.is_minorenne).length;
 
+  // Calcolo Previsione Mese Corrente
+  const allMonths = Array.from(
+    new Set(quote.map((q) => q.mese_riferimento || q.data_scadenza.substring(0, 7)).filter(Boolean))
+  ).sort();
+  const currentMonthStr = '2024-10'; // default periodo attivo o mese corrente
+  const activeMonth = allMonths.includes(currentMonthStr) ? currentMonthStr : (allMonths[0] || '2024-09');
+
+  const quoteMeseAttivo = quote.filter(
+    (q) => (q.mese_riferimento || q.data_scadenza.substring(0, 7)) === activeMonth && q.stato !== 'annullata'
+  );
+  const totalePrevistoMese = quoteMeseAttivo.reduce((sum, q) => sum + q.importo, 0);
+  const totaleIncassatoMese = quoteMeseAttivo.reduce((sum, q) => sum + (q.importo_pagato || 0), 0);
+  const totaleResiduoMese = totalePrevistoMese - totaleIncassatoMese;
+  const percIncassatoMese = totalePrevistoMese > 0 ? Math.round((totaleIncassatoMese / totalePrevistoMese) * 100) : 0;
+
+  const mesiNomi = [
+    'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+    'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
+  ];
+  const [actYear, actM] = activeMonth.split('-');
+  const labelMeseAttivo = `${mesiNomi[parseInt(actM, 10) - 1] || actM} ${actYear}`;
+
   return (
     <div className="container-fluid py-4">
       {/* Banner Allerta Quote Scadute se presenti */}
@@ -159,6 +181,55 @@ export const DashboardView: React.FC<Props> = ({
                 Registro Cassa &rarr;
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Riquadro Previsione Incassi del Mese & Flusso di Cassa */}
+      <div className="card border-0 shadow-sm rounded-4 bg-white mb-4 overflow-hidden border-start border-primary border-4">
+        <div className="card-body p-4">
+          <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
+            <div className="d-flex align-items-center">
+              <div className="p-3 bg-primary-subtle text-primary rounded-4 me-3">
+                <i className="bi bi-graph-up-arrow fs-2"></i>
+              </div>
+              <div>
+                <span className="badge bg-primary-subtle text-primary border border-primary-subtle mb-1">
+                  <i className="bi bi-calendar-event me-1"></i> Previsione Mese: {labelMeseAttivo}
+                </span>
+                <h4 className="fw-bold mb-1 text-dark">
+                  Quote da incassare nel mese: <span className="text-primary">€ {totalePrevistoMese.toFixed(2)}</span>
+                </h4>
+                <div className="small text-muted">
+                  Totale previsto per <strong>{quoteMeseAttivo.length} atleti</strong> iscritti ai corsi •{' '}
+                  <span className="text-success fw-bold">€ {totaleIncassatoMese.toFixed(2)} già riscossi ({percIncassatoMese}%)</span> •{' '}
+                  <span className="text-warning-emphasis fw-bold">€ {totaleResiduoMese.toFixed(2)} residui</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="d-flex align-items-center gap-2 flex-wrap">
+              <button
+                className="btn btn-outline-primary btn-sm fw-semibold"
+                onClick={() => onNavigateTab('quote', activeMonth)}
+              >
+                <i className="bi bi-calendar3-week me-1"></i> Scadenziario Quote ({quoteMeseAttivo.length})
+              </button>
+              <button
+                className="btn btn-primary btn-sm fw-bold shadow-sm"
+                onClick={() => onNavigateTab('previsioni')}
+              >
+                <i className="bi bi-calculator me-1"></i> Analisi Previsione & Budget Spese &rarr;
+              </button>
+            </div>
+          </div>
+
+          <div className="progress mt-3" style={{ height: '8px' }}>
+            <div
+              className={`progress-bar ${percIncassatoMese === 100 ? 'bg-success' : percIncassatoMese > 50 ? 'bg-primary' : 'bg-warning'}`}
+              role="progressbar"
+              style={{ width: `${percIncassatoMese}%` }}
+            ></div>
           </div>
         </div>
       </div>
