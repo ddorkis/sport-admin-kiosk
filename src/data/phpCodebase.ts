@@ -14,2211 +14,287 @@ export interface CodeFile {
   content: string;
 }
 
-export const SQL_SCHEMA = `-- ==============================================================================
--- SCHEMA MARIADB / MYSQL: GESTIONALE SPORTIVO CON KIOSK & TESSERATI MINORENNI
--- Tabelle: anno, persone, tesserati, gruppi, gruppi_tesserati, quote, pagamenti, utenti
--- ==============================================================================
-
-CREATE DATABASE IF NOT EXISTS \`gestionale_sportivo\` 
-  DEFAULT CHARACTER SET utf8mb4 
-  COLLATE utf8mb4_unicode_ci;
-
-USE \`gestionale_sportivo\`;
-
--- 1. TABELLA ANNO SPORTIVO
-CREATE TABLE IF NOT EXISTS \`anno\` (
-  \`id\` INT AUTO_INCREMENT PRIMARY KEY,
-  \`anno\` VARCHAR(20) NOT NULL COMMENT 'es. 2024/2025',
-  \`data_inizio\` DATE NOT NULL,
-  \`data_fine\` DATE NOT NULL,
-  \`attivo\` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 se anno corrente',
-  \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 2. TABELLA PERSONE (Anagrafica generale con supporto atleti minorenni e tutori)
-CREATE TABLE IF NOT EXISTS \`persone\` (
-  \`id\` INT AUTO_INCREMENT PRIMARY KEY,
-  \`nome\` VARCHAR(80) NOT NULL,
-  \`cognome\` VARCHAR(80) NOT NULL,
-  \`codice_fiscale\` VARCHAR(16) NOT NULL UNIQUE,
-  \`data_nascita\` DATE NOT NULL,
-  \`luogo_nascita\` VARCHAR(100) NULL,
-  \`indirizzo\` VARCHAR(150) NULL,
-  \`citta\` VARCHAR(100) NULL,
-  \`telefono\` VARCHAR(30) NULL,
-  \`email\` VARCHAR(120) NULL,
-  \`is_minorenne\` TINYINT(1) NOT NULL DEFAULT 0,
-  -- Dati del Tutore Legale (obbligatori se is_minorenne = 1)
-  \`tutore_nome\` VARCHAR(80) NULL,
-  \`tutore_cognome\` VARCHAR(80) NULL,
-  \`tutore_cf\` VARCHAR(16) NULL,
-  \`tutore_telefono\` VARCHAR(30) NULL,
-  \`tutore_email\` VARCHAR(120) NULL,
-  \`tutore_relazione\` VARCHAR(40) NULL COMMENT 'Padre, Madre, Tutore Legale',
-  \`note\` TEXT NULL,
-  \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX \`idx_persona_cognome_nome\` (\`cognome\`, \`nome\`),
-  INDEX \`idx_persona_cf\` (\`codice_fiscale\`),
-  INDEX \`idx_persona_minorenne\` (\`is_minorenne\`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 3. TABELLA TESSERATI (Collegamento persona e anno sportivo)
-CREATE TABLE IF NOT EXISTS \`tesserati\` (
-  \`id\` INT AUTO_INCREMENT PRIMARY KEY,
-  \`persona_id\` INT NOT NULL,
-  \`anno_id\` INT NOT NULL,
-  \`numero_tessera\` VARCHAR(40) NOT NULL,
-  \`data_tesseramento\` DATE NOT NULL,
-  \`tipo_tesseramento\` ENUM('Agonista', 'Non Agonista', 'Promozionale', 'Socio / Dirigente') NOT NULL DEFAULT 'Agonista',
-  \`certificato_medico_scadenza\` DATE NULL,
-  \`stato\` ENUM('Attivo', 'Sospeso', 'Scaduto') NOT NULL DEFAULT 'Attivo',
-  \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY \`uk_persona_anno\` (\`persona_id\`, \`anno_id\`),
-  INDEX \`idx_tesserato_numero\` (\`numero_tessera\`),
-  CONSTRAINT \`fk_tesserati_persona\` FOREIGN KEY (\`persona_id\`) REFERENCES \`persone\` (\`id\`) ON DELETE CASCADE,
-  CONSTRAINT \`fk_tesserati_anno\` FOREIGN KEY (\`anno_id\`) REFERENCES \`anno\` (\`id\`) ON DELETE RESTRICT
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 4. TABELLA GRUPPI (Annuale con parametri di calcolo automatico quote)
-CREATE TABLE IF NOT EXISTS \`gruppi\` (
-  \`id\` INT AUTO_INCREMENT PRIMARY KEY,
-  \`anno_id\` INT NOT NULL,
-  \`nome_gruppo\` VARCHAR(100) NOT NULL,
-  \`descrizione\` TEXT NULL,
-  \`categoria\` VARCHAR(80) NULL,
-  \`quota_mensile\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-  \`giorno_scadenza_mensile\` TINYINT NOT NULL DEFAULT 10 COMMENT 'Giorno del mese (es. 10)',
-  \`data_inizio\` DATE NOT NULL COMMENT 'Inizio corso/gruppo',
-  \`data_fine\` DATE NOT NULL COMMENT 'Fine corso/gruppo',
-  \`istruttore\` VARCHAR(100) NULL,
-  \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT \`fk_gruppi_anno\` FOREIGN KEY (\`anno_id\`) REFERENCES \`anno\` (\`id\`) ON DELETE RESTRICT
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 5. TABELLA GRUPPI_TESSERATI (Associazione molti-a-molti tra gruppo e tesserato nell'anno)
-CREATE TABLE IF NOT EXISTS \`gruppi_tesserati\` (
-  \`id\` INT AUTO_INCREMENT PRIMARY KEY,
-  \`gruppo_id\` INT NOT NULL,
-  \`tesserato_id\` INT NOT NULL,
-  \`data_iscrizione\` DATE NOT NULL,
-  \`note\` VARCHAR(255) NULL,
-  UNIQUE KEY \`uk_gruppo_tesserato\` (\`gruppo_id\`, \`tesserato_id\`),
-  CONSTRAINT \`fk_gt_gruppo\` FOREIGN KEY (\`gruppo_id\`) REFERENCES \`gruppi\` (\`id\`) ON DELETE CASCADE,
-  CONSTRAINT \`fk_gt_tesserato\` FOREIGN KEY (\`tesserato_id\`) REFERENCES \`tesserati\` (\`id\`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 6. TABELLA QUOTE (Create automaticamente dal gruppo o manuali)
-CREATE TABLE IF NOT EXISTS \`quote\` (
-  \`id\` INT AUTO_INCREMENT PRIMARY KEY,
-  \`tesserato_id\` INT NOT NULL,
-  \`gruppo_id\` INT NULL COMMENT 'NULL se quota libera/straordinaria',
-  \`causale\` VARCHAR(150) NOT NULL,
-  \`importo\` DECIMAL(10,2) NOT NULL,
-  \`importo_pagato\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-  \`data_scadenza\` DATE NOT NULL,
-  \`stato\` ENUM('da_pagare', 'parziale', 'pagata', 'annullata') NOT NULL DEFAULT 'da_pagare',
-  \`mese_riferimento\` VARCHAR(7) NULL COMMENT 'Formato YYYY-MM per evitare duplicati automatici',
-  \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX \`idx_quote_scadenza_stato\` (\`data_scadenza\`, \`stato\`),
-  CONSTRAINT \`fk_quote_tesserato\` FOREIGN KEY (\`tesserato_id\`) REFERENCES \`tesserati\` (\`id\`) ON DELETE CASCADE,
-  CONSTRAINT \`fk_quote_gruppo\` FOREIGN KEY (\`gruppo_id\`) REFERENCES \`gruppi\` (\`id\`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 7. TABELLA PAGAMENTI (Relativi a una quota specifica o pagamenti liberi non riconducibili a quota)
-CREATE TABLE IF NOT EXISTS \`pagamenti\` (
-  \`id\` INT AUTO_INCREMENT PRIMARY KEY,
-  \`tesserato_id\` INT NOT NULL,
-  \`quota_id\` INT NULL COMMENT 'Se NULL, pagamento extra non riconducibile a quota',
-  \`importo\` DECIMAL(10,2) NOT NULL,
-  \`data_pagamento\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  \`metodo_pagamento\` ENUM('contanti', 'pos', 'bonifico', 'satispay') NOT NULL DEFAULT 'contanti',
-  \`causale\` VARCHAR(150) NOT NULL,
-  \`ricevuta_numero\` VARCHAR(50) NOT NULL,
-  \`note\` TEXT NULL,
-  CONSTRAINT \`fk_pagamenti_tesserato\` FOREIGN KEY (\`tesserato_id\`) REFERENCES \`tesserati\` (\`id\`) ON DELETE CASCADE,
-  CONSTRAINT \`fk_pagamenti_quota\` FOREIGN KEY (\`quota_id\`) REFERENCES \`quote\` (\`id\`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 8. TABELLA UTENTI (Con flag KIOSK per accesso diretto all'interfaccia touch)
-CREATE TABLE IF NOT EXISTS \`utenti\` (
-  \`id\` INT AUTO_INCREMENT PRIMARY KEY,
-  \`username\` VARCHAR(50) NOT NULL UNIQUE,
-  \`password_hash\` VARCHAR(255) NOT NULL,
-  \`nome\` VARCHAR(100) NOT NULL,
-  \`ruolo\` ENUM('admin', 'operatore', 'desk') NOT NULL DEFAULT 'operatore',
-  \`is_kiosk\` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Se 1, reindirizza direttamente al Kiosk touch',
-  \`attivo\` TINYINT(1) NOT NULL DEFAULT 1,
-  \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 9. TABELLA DATI ASSOCIAZIONE SPORTIVA (Per intestazione stampe, ricevute, moduli)
-CREATE TABLE IF NOT EXISTS \`associazione\` (
-  \`id\` INT PRIMARY KEY DEFAULT 1,
-  \`denominazione\` VARCHAR(150) NOT NULL,
-  \`codice_fiscale\` VARCHAR(16) NOT NULL,
-  \`partita_iva\` VARCHAR(20) NULL,
-  \`indirizzo\` VARCHAR(150) NOT NULL,
-  \`cap\` VARCHAR(10) NOT NULL,
-  \`comune\` VARCHAR(80) NOT NULL,
-  \`provincia\` VARCHAR(4) NOT NULL,
-  \`legale_rappresentante\` VARCHAR(100) NOT NULL,
-  \`telefono\` VARCHAR(30) NULL,
-  \`email\` VARCHAR(120) NULL,
-  \`pec\` VARCHAR(120) NULL,
-  \`codice_affiliazione\` VARCHAR(80) NULL,
-  \`iban\` VARCHAR(35) NULL,
-  \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ==============================================================================
--- DATI INIZIALI DI SEEDING (Admin predefinito e Anno 2024/2025)
--- ==============================================================================
-
-INSERT INTO \`associazione\` (\`id\`, \`denominazione\`, \`codice_fiscale\`, \`partita_iva\`, \`indirizzo\`, \`cap\`, \`comune\`, \`provincia\`, \`legale_rappresentante\`, \`telefono\`, \`email\`, \`pec\`, \`codice_affiliazione\`, \`iban\`) VALUES
-(1, 'A.S.D. Polisportiva Aurora', '97854120584', '04859620581', 'Via dello Sport, 24', '00153', 'Roma', 'RM', 'Alessandro Bianchi', '06 5894123', 'segreteria@polisportivaurora.it', 'polisportivaurora@pec.it', 'CONI / CSEN n. 45892', 'IT60X0542811101000000123456')
-ON DUPLICATE KEY UPDATE \`denominazione\` = VALUES(\`denominazione\`);
-
--- Password default 'admin123' con BCRYPT: $2y$10$4.T8K321b7kE8lUqF7kQ3.QvB9iZq8WwJv9C5k4R3m1Q8W9E0R1T2
--- Per semplicità nel test: username 'admin', 'kiosk'
-INSERT INTO \`anno\` (\`id\`, \`anno\`, \`data_inizio\`, \`data_fine\`, \`attivo\`) VALUES
-(1, '2024/2025', '2024-09-01', '2025-06-30', 1);
-
-INSERT INTO \`utenti\` (\`id\`, \`username\`, \`password_hash\`, \`nome\`, \`ruolo\`, \`is_kiosk\`, \`attivo\`) VALUES
-(1, 'admin', '$2y$10$wE9sS4Q0wO9vC3X4K8V/ueKk5m9Q9J2n2bK7z7V8V7x6c5b4n3m2', 'Direttore Sportivo', 'admin', 0, 1),
-(2, 'kiosk', '$2y$10$wE9sS4Q0wO9vC3X4K8V/ueKk5m9Q9J2n2bK7z7V8V7x6c5b4n3m2', 'Totem Desk Reception', 'desk', 1, 1);
-
-INSERT INTO \`gruppi\` (\`id\`, \`anno_id\`, \`nome_gruppo\`, \`descrizione\`, \`categoria\`, \`quota_mensile\`, \`giorno_scadenza_mensile\`, \`data_inizio\`, \`data_fine\`, \`istruttore\`) VALUES
-(1, 1, 'Basket Under 14 Maschile', 'Allenamenti Lun-Mer-Ven 17:30', 'Pallacanestro Giovanile', 60.00, 10, '2024-09-01', '2025-05-31', 'Coach Valerio Mancini'),
-(2, 1, 'Volley Minivolley Promo', 'Allenamenti Mar-Gio 16:30', 'Pallavolo Avviamento', 45.00, 10, '2024-10-01', '2025-05-31', 'Istruttrice Laura Donati');
-`;
+export const SQL_SCHEMA = "-- ==============================================================================\n-- SCHEMA MARIADB / MYSQL: GESTIONALE SPORTIVO CON KIOSK & TESSERATI MINORENNI\n-- Tabelle: anno, persone, tesserati, gruppi, gruppi_tesserati, quote, pagamenti, utenti\n-- ==============================================================================\n\nCREATE DATABASE IF NOT EXISTS `gestionale_sportivo` \n  DEFAULT CHARACTER SET utf8mb4 \n  COLLATE utf8mb4_unicode_ci;\n\nUSE `gestionale_sportivo`;\n\n-- 1. TABELLA ANNO SPORTIVO\nCREATE TABLE IF NOT EXISTS `anno` (\n  `id` INT AUTO_INCREMENT PRIMARY KEY,\n  `anno` VARCHAR(20) NOT NULL COMMENT 'es. 2024/2025',\n  `data_inizio` DATE NOT NULL,\n  `data_fine` DATE NOT NULL,\n  `attivo` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 se anno corrente',\n  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;\n\n-- 2. TABELLA PERSONE (Anagrafica generale con supporto atleti minorenni e tutori)\nCREATE TABLE IF NOT EXISTS `persone` (\n  `id` INT AUTO_INCREMENT PRIMARY KEY,\n  `nome` VARCHAR(80) NOT NULL,\n  `cognome` VARCHAR(80) NOT NULL,\n  `codice_fiscale` VARCHAR(16) NOT NULL UNIQUE,\n  `data_nascita` DATE NOT NULL,\n  `luogo_nascita` VARCHAR(100) NULL,\n  `indirizzo` VARCHAR(150) NULL,\n  `citta` VARCHAR(100) NULL,\n  `telefono` VARCHAR(30) NULL,\n  `email` VARCHAR(120) NULL,\n  `is_minorenne` TINYINT(1) NOT NULL DEFAULT 0,\n  -- Dati del Tutore Legale (obbligatori se is_minorenne = 1)\n  `tutore_nome` VARCHAR(80) NULL,\n  `tutore_cognome` VARCHAR(80) NULL,\n  `tutore_cf` VARCHAR(16) NULL,\n  `tutore_telefono` VARCHAR(30) NULL,\n  `tutore_email` VARCHAR(120) NULL,\n  `tutore_relazione` VARCHAR(40) NULL COMMENT 'Padre, Madre, Tutore Legale',\n  `note` TEXT NULL,\n  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n  INDEX `idx_persona_cognome_nome` (`cognome`, `nome`),\n  INDEX `idx_persona_cf` (`codice_fiscale`),\n  INDEX `idx_persona_minorenne` (`is_minorenne`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;\n\n-- 3. TABELLA TESSERATI (Collegamento persona e anno sportivo)\nCREATE TABLE IF NOT EXISTS `tesserati` (\n  `id` INT AUTO_INCREMENT PRIMARY KEY,\n  `persona_id` INT NOT NULL,\n  `anno_id` INT NOT NULL,\n  `numero_tessera` VARCHAR(40) NOT NULL,\n  `data_tesseramento` DATE NOT NULL,\n  `tipo_tesseramento` ENUM('Agonista', 'Non Agonista', 'Promozionale', 'Socio / Dirigente') NOT NULL DEFAULT 'Agonista',\n  `certificato_medico_scadenza` DATE NULL,\n  `stato` ENUM('Attivo', 'Sospeso', 'Scaduto') NOT NULL DEFAULT 'Attivo',\n  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n  UNIQUE KEY `uk_persona_anno` (`persona_id`, `anno_id`),\n  INDEX `idx_tesserato_numero` (`numero_tessera`),\n  CONSTRAINT `fk_tesserati_persona` FOREIGN KEY (`persona_id`) REFERENCES `persone` (`id`) ON DELETE CASCADE,\n  CONSTRAINT `fk_tesserati_anno` FOREIGN KEY (`anno_id`) REFERENCES `anno` (`id`) ON DELETE RESTRICT\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;\n\n-- 4. TABELLA GRUPPI (Annuale con parametri di calcolo automatico quote)\nCREATE TABLE IF NOT EXISTS `gruppi` (\n  `id` INT AUTO_INCREMENT PRIMARY KEY,\n  `anno_id` INT NOT NULL,\n  `nome_gruppo` VARCHAR(100) NOT NULL,\n  `descrizione` TEXT NULL,\n  `categoria` VARCHAR(80) NULL,\n  `quota_mensile` DECIMAL(10,2) NOT NULL DEFAULT 0.00,\n  `giorno_scadenza_mensile` TINYINT NOT NULL DEFAULT 10 COMMENT 'Giorno del mese (es. 10)',\n  `data_inizio` DATE NOT NULL COMMENT 'Inizio corso/gruppo',\n  `data_fine` DATE NOT NULL COMMENT 'Fine corso/gruppo',\n  `istruttore` VARCHAR(100) NULL,\n  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n  CONSTRAINT `fk_gruppi_anno` FOREIGN KEY (`anno_id`) REFERENCES `anno` (`id`) ON DELETE RESTRICT\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;\n\n-- 5. TABELLA GRUPPI_TESSERATI (Associazione molti-a-molti tra gruppo e tesserato nell'anno)\nCREATE TABLE IF NOT EXISTS `gruppi_tesserati` (\n  `id` INT AUTO_INCREMENT PRIMARY KEY,\n  `gruppo_id` INT NOT NULL,\n  `tesserato_id` INT NOT NULL,\n  `data_iscrizione` DATE NOT NULL,\n  `note` VARCHAR(255) NULL,\n  UNIQUE KEY `uk_gruppo_tesserato` (`gruppo_id`, `tesserato_id`),\n  CONSTRAINT `fk_gt_gruppo` FOREIGN KEY (`gruppo_id`) REFERENCES `gruppi` (`id`) ON DELETE CASCADE,\n  CONSTRAINT `fk_gt_tesserato` FOREIGN KEY (`tesserato_id`) REFERENCES `tesserati` (`id`) ON DELETE CASCADE\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;\n\n-- 6. TABELLA QUOTE (Create automaticamente dal gruppo o manuali)\nCREATE TABLE IF NOT EXISTS `quote` (\n  `id` INT AUTO_INCREMENT PRIMARY KEY,\n  `tesserato_id` INT NOT NULL,\n  `gruppo_id` INT NULL COMMENT 'NULL se quota libera/straordinaria',\n  `causale` VARCHAR(150) NOT NULL,\n  `importo` DECIMAL(10,2) NOT NULL,\n  `importo_pagato` DECIMAL(10,2) NOT NULL DEFAULT 0.00,\n  `data_scadenza` DATE NOT NULL,\n  `stato` ENUM('da_pagare', 'parziale', 'pagata', 'annullata') NOT NULL DEFAULT 'da_pagare',\n  `mese_riferimento` VARCHAR(7) NULL COMMENT 'Formato YYYY-MM per evitare duplicati automatici',\n  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n  INDEX `idx_quote_scadenza_stato` (`data_scadenza`, `stato`),\n  CONSTRAINT `fk_quote_tesserato` FOREIGN KEY (`tesserato_id`) REFERENCES `tesserati` (`id`) ON DELETE CASCADE,\n  CONSTRAINT `fk_quote_gruppo` FOREIGN KEY (`gruppo_id`) REFERENCES `gruppi` (`id`) ON DELETE SET NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;\n\n-- 7. TABELLA PAGAMENTI (Relativi a una quota specifica o pagamenti liberi non riconducibili a quota)\nCREATE TABLE IF NOT EXISTS `pagamenti` (\n  `id` INT AUTO_INCREMENT PRIMARY KEY,\n  `tesserato_id` INT NOT NULL,\n  `quota_id` INT NULL COMMENT 'Se NULL, pagamento extra non riconducibile a quota',\n  `importo` DECIMAL(10,2) NOT NULL,\n  `data_pagamento` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `metodo_pagamento` ENUM('contanti', 'pos', 'bonifico', 'satispay') NOT NULL DEFAULT 'contanti',\n  `causale` VARCHAR(150) NOT NULL,\n  `ricevuta_numero` VARCHAR(50) NOT NULL,\n  `note` TEXT NULL,\n  CONSTRAINT `fk_pagamenti_tesserato` FOREIGN KEY (`tesserato_id`) REFERENCES `tesserati` (`id`) ON DELETE CASCADE,\n  CONSTRAINT `fk_pagamenti_quota` FOREIGN KEY (`quota_id`) REFERENCES `quote` (`id`) ON DELETE SET NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;\n\n-- 8. TABELLA UTENTI (Con flag KIOSK per accesso diretto all'interfaccia touch)\nCREATE TABLE IF NOT EXISTS `utenti` (\n  `id` INT AUTO_INCREMENT PRIMARY KEY,\n  `username` VARCHAR(50) NOT NULL UNIQUE,\n  `password_hash` VARCHAR(255) NOT NULL,\n  `nome` VARCHAR(100) NOT NULL,\n  `ruolo` ENUM('admin', 'operatore', 'desk') NOT NULL DEFAULT 'operatore',\n  `is_kiosk` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Se 1, reindirizza direttamente al Kiosk touch',\n  `attivo` TINYINT(1) NOT NULL DEFAULT 1,\n  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;\n\n-- 9. TABELLA DATI ASSOCIAZIONE SPORTIVA (Per intestazione stampe, ricevute, moduli)\nCREATE TABLE IF NOT EXISTS `associazione` (\n  `id` INT PRIMARY KEY DEFAULT 1,\n  `denominazione` VARCHAR(150) NOT NULL,\n  `codice_fiscale` VARCHAR(16) NOT NULL,\n  `partita_iva` VARCHAR(20) NULL,\n  `indirizzo` VARCHAR(150) NOT NULL,\n  `cap` VARCHAR(10) NOT NULL,\n  `comune` VARCHAR(80) NOT NULL,\n  `provincia` VARCHAR(4) NOT NULL,\n  `legale_rappresentante` VARCHAR(100) NOT NULL,\n  `telefono` VARCHAR(30) NULL,\n  `email` VARCHAR(120) NULL,\n  `pec` VARCHAR(120) NULL,\n  `codice_affiliazione` VARCHAR(80) NULL,\n  `iban` VARCHAR(35) NULL,\n  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;\n\n-- 10. TABELLA SPESE PREVISIONALI (Budget & Previsione Bilancio CD)\nCREATE TABLE IF NOT EXISTS `spese_previsionali` (\n  `id` INT AUTO_INCREMENT PRIMARY KEY,\n  `anno_id` INT NOT NULL,\n  `titolo` VARCHAR(150) NOT NULL,\n  `categoria` VARCHAR(80) NOT NULL DEFAULT 'Altro',\n  `importo_mensile` DECIMAL(10,2) NOT NULL DEFAULT 0.00,\n  `ricorrente` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 se spesa attiva tutti i mesi della stagione',\n  `mesi_json` TEXT NULL COMMENT 'JSON array dei mesi specifici se non ricorrente',\n  `note` TEXT NULL,\n  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n  CONSTRAINT `fk_spese_anno` FOREIGN KEY (`anno_id`) REFERENCES `anno` (`id`) ON DELETE CASCADE\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;\n\n-- ==============================================================================\n-- DATI INIZIALI DI SEEDING (Admin predefinito, Anno 2024/2025, Gruppi e Spese)\n-- ==============================================================================\n\nINSERT INTO `associazione` (`id`, `denominazione`, `codice_fiscale`, `partita_iva`, `indirizzo`, `cap`, `comune`, `provincia`, `legale_rappresentante`, `telefono`, `email`, `pec`, `codice_affiliazione`, `iban`) VALUES\n(1, 'A.S.D. Polisportiva Aurora', '97854120584', '04859620581', 'Via dello Sport, 24', '00153', 'Roma', 'RM', 'Alessandro Bianchi', '06 5894123', 'segreteria@polisportivaurora.it', 'polisportivaurora@pec.it', 'CONI / CSEN n. 45892', 'IT60X0542811101000000123456')\nON DUPLICATE KEY UPDATE `denominazione` = VALUES(`denominazione`);\n\n-- Password default 'admin123' con BCRYPT: $2y$10$4.T8K321b7kE8lUqF7kQ3.QvB9iZq8WwJv9C5k4R3m1Q8W9E0R1T2\n-- Per semplicità nel test: username 'admin', 'kiosk'\nINSERT INTO `anno` (`id`, `anno`, `data_inizio`, `data_fine`, `attivo`) VALUES\n(1, '2024/2025', '2024-09-01', '2025-06-30', 1);\n\nINSERT INTO `utenti` (`id`, `username`, `password_hash`, `nome`, `ruolo`, `is_kiosk`, `attivo`) VALUES\n(1, 'admin', '$2y$10$wE9sS4Q0wO9vC3X4K8V/ueKk5m9Q9J2n2bK7z7V8V7x6c5b4n3m2', 'Direttore Sportivo', 'admin', 0, 1),\n(2, 'kiosk', '$2y$10$wE9sS4Q0wO9vC3X4K8V/ueKk5m9Q9J2n2bK7z7V8V7x6c5b4n3m2', 'Totem Desk Reception', 'desk', 1, 1);\n\nINSERT INTO `gruppi` (`id`, `anno_id`, `nome_gruppo`, `descrizione`, `categoria`, `quota_mensile`, `giorno_scadenza_mensile`, `data_inizio`, `data_fine`, `istruttore`) VALUES\n(1, 1, 'Basket Under 14 Maschile', 'Allenamenti Lun-Mer-Ven 17:30', 'Pallacanestro Giovanile', 60.00, 10, '2024-09-01', '2025-05-31', 'Coach Valerio Mancini'),\n(2, 1, 'Volley Minivolley Promo', 'Allenamenti Mar-Gio 16:30', 'Pallavolo Avviamento', 45.00, 10, '2024-10-01', '2025-05-31', 'Istruttrice Laura Donati');\n\nINSERT INTO `spese_previsionali` (`id`, `anno_id`, `titolo`, `categoria`, `importo_mensile`, `ricorrente`, `mesi_json`, `note`) VALUES\n(1, 1, 'Affitto Palazzetto dello Sport e Pista', 'Affitto Impianti / Pista', 350.00, 1, NULL, 'Canone mensile concordato per spazi allenamento'),\n(2, 1, 'Compensi Istruttori Tecnici Qualificati', 'Compensi Tecnici / Allenatori', 450.00, 1, NULL, 'Rimborsi forfettari e compensi istruttori per corsi attivi'),\n(3, 1, 'Assicurazioni Sportive & Tesseramenti Iniziali', 'Assicurazioni', 220.00, 0, '[\"2024-09\",\"2024-10\"]', 'Coperture assicurative integrative obbligatorie atleti'),\n(4, 1, 'Fornitura Materiale Tecnico & Divise Sociali', 'Materiale Sportivo & Divise', 180.00, 0, '[\"2024-10\",\"2024-11\"]', 'Kit gara e abbigliamento sociale stagione'),\n(5, 1, 'Quota Iscrizione Gare e Trasferte Campionati', 'Gare & Trasferte', 150.00, 0, '[\"2025-02\",\"2025-03\",\"2025-04\"]', 'Iscrizioni circuiti regionali e nazionali');\n";
 
 export const PHP_FILES: CodeFile[] = [
   {
-    path: 'config/paths.php',
-    filename: 'paths.php',
-    folder: 'config',
-    language: 'php',
-    description: 'Configurazione centralizzata e parametrica dei percorsi del filesystem (private, config, public)',
-    content: `<?php
-/**
- * ==============================================================================
- * CONFIGURAZIONE PARAMETRICA DEI PERCORSI DEL FILESYSTEM (PATHS CONFIG)
- * Posizione predefinita: /config/paths.php
- * ==============================================================================
- *
- * Centralizza la definizione di tutti i percorsi dell'applicazione per permettere
- * di organizzare liberamente il filesystem (es. isolare 'private' e 'config'
- * fuori dalla DocumentRoot del webserver Apache / Nginx o in cartelle dedicate).
- *
- * PRIORITÀ DI CONFIGURAZIONE:
- * 1. Variabili d'ambiente di sistema (SetEnv Apache, fastcgi_param Nginx, Docker, .env)
- *    - APP_ROOT_PATH
- *    - APP_CONFIG_PATH
- *    - APP_PRIVATE_PATH
- *    - APP_PUBLIC_PATH
- * 2. File opzionale 'public/paths.local.php' caricato prima di index.php
- * 3. Valori predefiniti relativi alla struttura standard del progetto
- */
-
-function getEnvParam($key, $default = null) {
-    $val = getenv($key);
-    if ($val !== false && $val !== '') return $val;
-    if (isset($_ENV[$key]) && $_ENV[$key] !== '') return $_ENV[$key];
-    if (isset($_SERVER[$key]) && $_SERVER[$key] !== '') return $_SERVER[$key];
-    return $default;
-}
-
-// 1. Root del Progetto (cartella genitore contenente public, private, config)
-if (!defined('PATH_ROOT')) {
-    $envRoot = getEnvParam('APP_ROOT_PATH');
-    define('PATH_ROOT', $envRoot ? rtrim($envRoot, '/\\\\') : dirname(__DIR__));
-}
-
-// 2. Percorso Cartella Config (parametri database, percorsi, sicurezza)
-if (!defined('PATH_CONFIG')) {
-    $envConfig = getEnvParam('APP_CONFIG_PATH');
-    define('PATH_CONFIG', $envConfig ? rtrim($envConfig, '/\\\\') : (PATH_ROOT . '/config'));
-}
-
-// 3. Percorso Cartella Private (protetta, non accessibile direttamente via browser)
-if (!defined('PATH_PRIVATE')) {
-    $envPrivate = getEnvParam('APP_PRIVATE_PATH');
-    define('PATH_PRIVATE', $envPrivate ? rtrim($envPrivate, '/\\\\') : (PATH_ROOT . '/private'));
-}
-
-// 4. Sottocartelle modulari interne alla cartella Private
-if (!defined('PATH_INCLUDES')) {
-    define('PATH_INCLUDES', PATH_PRIVATE . '/includes');
-}
-if (!defined('PATH_PAGES')) {
-    define('PATH_PAGES', PATH_PRIVATE . '/pages');
-}
-if (!defined('PATH_ACTIONS')) {
-    define('PATH_ACTIONS', PATH_PRIVATE . '/actions');
-}
-
-// 5. Percorso Cartella Public (DocumentRoot del webserver)
-if (!defined('PATH_PUBLIC')) {
-    $envPublic = getEnvParam('APP_PUBLIC_PATH');
-    define('PATH_PUBLIC', $envPublic ? rtrim($envPublic, '/\\\\') : (PATH_ROOT . '/public'));
-}
-
-// 6. Percorso Cartella Assets Pubblici (CSS, JS, Fonts locali offline)
-if (!defined('PATH_ASSETS')) {
-    $envAssets = getEnvParam('APP_ASSETS_PATH');
-    define('PATH_ASSETS', $envAssets ? rtrim($envAssets, '/\\\\') : (PATH_PUBLIC . '/assets'));
-}
-`
+    "path": "config/paths.php",
+    "filename": "paths.php",
+    "folder": "config",
+    "language": "php",
+    "description": "Configurazione centralizzata e parametrica dei percorsi del filesystem",
+    "content": "<?php\n/**\n * ==============================================================================\n * CONFIGURAZIONE PARAMETRICA DEI PERCORSI DEL FILESYSTEM (PATHS CONFIG)\n * Posizione predefinita: /config/paths.php\n * ==============================================================================\n *\n * Centralizza la definizione di tutti i percorsi dell'applicazione per permettere\n * di organizzare liberamente il filesystem (es. isolare 'private' e 'config'\n * fuori dalla DocumentRoot del webserver Apache / Nginx o in cartelle dedicate).\n *\n * PRIORITÀ DI CONFIGURAZIONE:\n * 1. Variabili d'ambiente di sistema (SetEnv Apache, fastcgi_param Nginx, Docker, .env)\n *    - APP_ROOT_PATH\n *    - APP_CONFIG_PATH\n *    - APP_PRIVATE_PATH\n *    - APP_PUBLIC_PATH\n * 2. File opzionale 'public/paths.local.php' caricato prima di index.php\n * 3. Valori predefiniti relativi alla struttura standard del progetto\n */\n\nfunction getEnvParam($key, $default = null) {\n    $val = getenv($key);\n    if ($val !== false && $val !== '') return $val;\n    if (isset($_ENV[$key]) && $_ENV[$key] !== '') return $_ENV[$key];\n    if (isset($_SERVER[$key]) && $_SERVER[$key] !== '') return $_SERVER[$key];\n    return $default;\n}\n\n// 1. Root del Progetto (cartella genitore contenente public, private, config)\nif (!defined('PATH_ROOT')) {\n    $envRoot = getEnvParam('APP_ROOT_PATH');\n    define('PATH_ROOT', $envRoot ? rtrim($envRoot, '/\\\\') : dirname(__DIR__));\n}\n\n// 2. Percorso Cartella Config (parametri database, percorsi, sicurezza)\nif (!defined('PATH_CONFIG')) {\n    $envConfig = getEnvParam('APP_CONFIG_PATH');\n    define('PATH_CONFIG', $envConfig ? rtrim($envConfig, '/\\\\') : (PATH_ROOT . '/config'));\n}\n\n// 3. Percorso Cartella Private (protetta, non accessibile direttamente via browser)\nif (!defined('PATH_PRIVATE')) {\n    $envPrivate = getEnvParam('APP_PRIVATE_PATH');\n    define('PATH_PRIVATE', $envPrivate ? rtrim($envPrivate, '/\\\\') : (PATH_ROOT . '/private'));\n}\n\n// 4. Sottocartelle modulari interne alla cartella Private\nif (!defined('PATH_INCLUDES')) {\n    define('PATH_INCLUDES', PATH_PRIVATE . '/includes');\n}\nif (!defined('PATH_PAGES')) {\n    define('PATH_PAGES', PATH_PRIVATE . '/pages');\n}\nif (!defined('PATH_ACTIONS')) {\n    define('PATH_ACTIONS', PATH_PRIVATE . '/actions');\n}\n\n// 5. Percorso Cartella Public (DocumentRoot del webserver)\nif (!defined('PATH_PUBLIC')) {\n    $envPublic = getEnvParam('APP_PUBLIC_PATH');\n    define('PATH_PUBLIC', $envPublic ? rtrim($envPublic, '/\\\\') : (PATH_ROOT . '/public'));\n}\n\n// 6. Percorso Cartella Assets Pubblici (CSS, JS, Fonts locali offline)\nif (!defined('PATH_ASSETS')) {\n    $envAssets = getEnvParam('APP_ASSETS_PATH');\n    define('PATH_ASSETS', $envAssets ? rtrim($envAssets, '/\\\\') : (PATH_PUBLIC . '/assets'));\n}\n"
   },
   {
-    path: 'public/paths.local.php.example',
-    filename: 'paths.local.php.example',
-    folder: 'public',
-    language: 'php',
-    description: 'Modello per personalizzare i percorsi su server con filesystem custom (rinominare in paths.local.php)',
-    content: `<?php
-/**
- * Personalizzazione Locale dei Percorsi (Opzionale)
- * Rinomina questo file in 'paths.local.php' all'interno di 'public/'
- * per sovrascrivere al volo la posizione delle cartelle sul tuo server.
- */
-
-// Esempio A: Se 'private' e 'config' sono state spostate fuori dalla WebRoot:
-// define('PATH_ROOT', '/var/www/gestionale_sportivo');
-// define('PATH_CONFIG', '/var/www/gestionale_sportivo/config');
-// define('PATH_PRIVATE', '/var/www/gestionale_sportivo/private');
-
-// Esempio B: Se hai rinominato o spostato le cartelle:
-// define('PATH_PRIVATE', '/opt/app_data/private');
-// define('PATH_CONFIG', '/opt/app_data/config');
-`
+    "path": "public/paths.local.php.example",
+    "filename": "paths.local.php.example",
+    "folder": "public",
+    "language": "php",
+    "description": "File di esempio per override locale dei percorsi",
+    "content": "<?php\n/**\n * Personalizzazione Locale dei Percorsi (Opzionale)\n * Rinomina questo file in 'paths.local.php' all'interno di 'public/'\n * per sovrascrivere al volo la posizione delle cartelle sul tuo server.\n */\n\n// Esempio A: Se 'private' e 'config' sono state spostate fuori dalla WebRoot:\n// define('PATH_ROOT', '/var/www/gestionale_sportivo');\n// define('PATH_CONFIG', '/var/www/gestionale_sportivo/config');\n// define('PATH_PRIVATE', '/var/www/gestionale_sportivo/private');\n\n// Esempio B: Se hai rinominato o spostato le cartelle:\n// define('PATH_PRIVATE', '/opt/app_data/private');\n// define('PATH_CONFIG', '/opt/app_data/config');\n"
   },
   {
-    path: 'config/database.php',
-    filename: 'database.php',
-    folder: 'config',
-    language: 'php',
-    description: 'Connessione PDO sicura a MariaDB con prepared statements e gestione errori',
-    content: `<?php
-/**
- * Connessione al Database MariaDB tramite PDO
- * Posizione: /config/database.php (Fuori dalla web root pubblica)
- */
-
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'gestionale_sportivo');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-define('DB_PORT', '3306');
-define('DB_CHARSET', 'utf8mb4');
-
-function getDbConnection() {
-    static $pdo = null;
-    if ($pdo === null) {
-        $dsn = "mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
-        $options = [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES   => false,
-        ];
-        try {
-            $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
-        } catch (PDOException $e) {
-            die("Errore critico di connessione a MariaDB: " . htmlspecialchars($e->getMessage()));
-        }
-    }
-    return $pdo;
-}
-`
+    "path": "config/database.php",
+    "filename": "database.php",
+    "folder": "config",
+    "language": "php",
+    "description": "Connessione PDO MariaDB / MySQL sicura e centralizzata",
+    "content": "<?php\n/**\n * Connessione al Database MariaDB tramite PDO\n * Posizione: /config/database.php (Fuori dalla web root pubblica)\n */\n\ndefine('DB_HOST', 'localhost');\ndefine('DB_NAME', 'gestionale_sportivo');\ndefine('DB_USER', 'root');\ndefine('DB_PASS', '');\ndefine('DB_PORT', '3306');\ndefine('DB_CHARSET', 'utf8mb4');\n\nfunction getDbConnection() {\n    static $pdo = null;\n    if ($pdo === null) {\n        $dsn = \"mysql:host=\" . DB_HOST . \";port=\" . DB_PORT . \";dbname=\" . DB_NAME . \";charset=\" . DB_CHARSET;\n        $options = [\n            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,\n            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,\n            PDO::ATTR_EMULATE_PREPARES   => false,\n        ];\n        try {\n            $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);\n        } catch (PDOException $e) {\n            die(\"Errore critico di connessione a MariaDB: \" . htmlspecialchars($e->getMessage()));\n        }\n    }\n    return $pdo;\n}\n"
   },
   {
-    path: 'public/index.php',
-    filename: 'index.php',
-    folder: 'public',
-    language: 'php',
-    description: 'Front Controller pubblico con percorsi parametrizzati PATH_CONFIG e PATH_PRIVATE',
-    content: `<?php
-/**
- * Front Controller Pubblico
- * Posizione: /public/index.php
- *
- * Riceve tutte le richieste HTTP e include in modo sicuro le pagine e le azioni
- * dalla cartella protetta parametrizzata PATH_PRIVATE.
- */
-session_start();
-
-// 1. Carica override locale dei percorsi se presente
-if (file_exists(__DIR__ . '/paths.local.php')) {
-    require_once __DIR__ . '/paths.local.php';
-}
-
-// 2. Determina PATH_CONFIG e carica la configurazione dei percorsi
-if (!defined('PATH_CONFIG')) {
-    $envCfg = getenv('APP_CONFIG_PATH') ?: ($_ENV['APP_CONFIG_PATH'] ?? ($_SERVER['APP_CONFIG_PATH'] ?? null));
-    define('PATH_CONFIG', $envCfg ? rtrim($envCfg, '/\\\\') : dirname(__DIR__) . '/config');
-}
-
-if (file_exists(PATH_CONFIG . '/paths.php')) {
-    require_once PATH_CONFIG . '/paths.php';
-}
-
-// 3. Fallback per le costanti se paths.php non fosse presente
-if (!defined('PATH_PRIVATE')) {
-    define('PATH_PRIVATE', dirname(__DIR__) . '/private');
-}
-if (!defined('PATH_INCLUDES')) {
-    define('PATH_INCLUDES', PATH_PRIVATE . '/includes');
-}
-if (!defined('PATH_PAGES')) {
-    define('PATH_PAGES', PATH_PRIVATE . '/pages');
-}
-if (!defined('PATH_ACTIONS')) {
-    define('PATH_ACTIONS', PATH_PRIVATE . '/actions');
-}
-if (!defined('PATH_ASSETS')) {
-    define('PATH_ASSETS', __DIR__ . '/assets');
-}
-
-// 4. Carica configurazione Database e funzioni di autenticazione
-require_once PATH_CONFIG . '/database.php';
-require_once PATH_INCLUDES . '/auth.php';
-
-// 5. Parametri della richiesta
-$page = isset($_GET['page']) ? trim($_GET['page']) : 'home';
-$action = isset($_GET['action']) ? trim($_GET['action']) : null;
-
-// 6. Gestione Azioni (POST / API)
-if ($action) {
-    $actionPath = PATH_ACTIONS . '/' . basename($action) . '.php';
-    if (file_exists($actionPath)) {
-        require $actionPath;
-        exit;
-    }
-}
-
-// 7. Verifica Autenticazione Utente
-$user = getCurrentUser();
-
-if (!$user) {
-    // Utente non autenticato -> Mostra login
-    require PATH_PAGES . '/login.php';
-    exit;
-}
-
-// 8. Controllo Flag KIOSK: se l'utente ha la modalità kiosk attiva e non ha forzato una pagina autorizzata
-if (!empty($user['is_kiosk']) && $page !== 'kiosk' && $page !== 'logout') {
-    header('Location: index.php?page=kiosk');
-    exit;
-}
-
-// 9. Routing sicuro con whitelist per impedire Local File Inclusion (LFI)
-$allowedPages = [
-    'home'           => 'gestionale.php',
-    'gestionale'     => 'gestionale.php',
-    'kiosk'          => 'kiosk.php',
-    'persone'        => 'persone.php',
-    'tesserati'      => 'tesserati.php',
-    'gruppi'         => 'gruppi.php',
-    'quote'          => 'quote.php',
-    'quote_scadute'  => 'quote_scadute.php',
-    'pagamenti'      => 'pagamenti.php',
-    'anni'           => 'anni.php',
-    'utenti'         => 'utenti.php',
-    'logout'         => 'logout.php'
-];
-
-$fileToLoad = $allowedPages[$page] ?? '404.php';
-$targetPath = PATH_PAGES . '/' . $fileToLoad;
-
-if (!file_exists($targetPath)) {
-    http_response_code(404);
-    echo "<h1>404 - Pagina non trovata</h1>";
-    exit;
-}
-
-// 10. Inclusione sicura della pagina privata
-require $targetPath;
-`
+    "path": "public/index.php",
+    "filename": "index.php",
+    "folder": "public",
+    "language": "php",
+    "description": "Front controller pubblico con routing sicuro whitelist",
+    "content": "<?php\n/**\n * Front Controller Pubblico\n * Posizione: /public/index.php\n *\n * Riceve tutte le richieste HTTP e include in modo sicuro le pagine e le azioni\n * dalla cartella protetta parametrizzata PATH_PRIVATE.\n */\nsession_start();\n\n// 1. Carica override locale dei percorsi se presente\nif (file_exists(__DIR__ . '/paths.local.php')) {\n    require_once __DIR__ . '/paths.local.php';\n}\n\n// 2. Determina PATH_CONFIG e carica la configurazione dei percorsi\nif (!defined('PATH_CONFIG')) {\n    $envCfg = getenv('APP_CONFIG_PATH') ?: ($_ENV['APP_CONFIG_PATH'] ?? ($_SERVER['APP_CONFIG_PATH'] ?? null));\n    define('PATH_CONFIG', $envCfg ? rtrim($envCfg, '/\\\\') : dirname(__DIR__) . '/config');\n}\n\nif (file_exists(PATH_CONFIG . '/paths.php')) {\n    require_once PATH_CONFIG . '/paths.php';\n}\n\n// 3. Fallback per le costanti se paths.php non fosse presente\nif (!defined('PATH_PRIVATE')) {\n    define('PATH_PRIVATE', dirname(__DIR__) . '/private');\n}\nif (!defined('PATH_INCLUDES')) {\n    define('PATH_INCLUDES', PATH_PRIVATE . '/includes');\n}\nif (!defined('PATH_PAGES')) {\n    define('PATH_PAGES', PATH_PRIVATE . '/pages');\n}\nif (!defined('PATH_ACTIONS')) {\n    define('PATH_ACTIONS', PATH_PRIVATE . '/actions');\n}\nif (!defined('PATH_ASSETS')) {\n    define('PATH_ASSETS', __DIR__ . '/assets');\n}\n\n// 4. Carica configurazione Database e funzioni di autenticazione\nrequire_once PATH_CONFIG . '/database.php';\nrequire_once PATH_INCLUDES . '/auth.php';\n\n// 5. Parametri della richiesta\n$page = isset($_GET['page']) ? trim($_GET['page']) : 'home';\n$action = isset($_GET['action']) ? trim($_GET['action']) : null;\n\n// 6. Gestione Azioni (POST / API)\nif ($action) {\n    $actionPath = PATH_ACTIONS . '/' . basename($action) . '.php';\n    if (file_exists($actionPath)) {\n        require $actionPath;\n        exit;\n    }\n}\n\n// 7. Verifica Autenticazione Utente\n$user = getCurrentUser();\n\nif (!$user) {\n    // Utente non autenticato -> Mostra login\n    require PATH_PAGES . '/login.php';\n    exit;\n}\n\n// 8. Controllo Flag KIOSK: se l'utente ha la modalità kiosk attiva e non ha forzato una pagina autorizzata\nif (!empty($user['is_kiosk']) && $page !== 'kiosk' && $page !== 'logout') {\n    header('Location: index.php?page=kiosk');\n    exit;\n}\n\n// 9. Routing sicuro con whitelist per impedire Local File Inclusion (LFI)\n$allowedPages = [\n    'home'           => 'gestionale.php',\n    'gestionale'     => 'gestionale.php',\n    'kiosk'          => 'kiosk.php',\n    'persone'        => 'persone.php',\n    'tesserati'      => 'tesserati.php',\n    'gruppi'         => 'gruppi.php',\n    'quote'          => 'quote.php',\n    'quote_scadute'  => 'quote_scadute.php',\n    'previsioni'     => 'previsioni.php',\n    'pagamenti'      => 'pagamenti.php',\n    'anni'           => 'anni.php',\n    'utenti'         => 'utenti.php',\n    'associazione'   => 'associazione.php',\n    'logout'         => 'logout.php'\n];\n\n$fileToLoad = $allowedPages[$page] ?? '404.php';\n$targetPath = PATH_PAGES . '/' . $fileToLoad;\n\nif (!file_exists($targetPath)) {\n    http_response_code(404);\n    echo \"<h1>404 - Pagina non trovata</h1>\";\n    exit;\n}\n\n// 10. Inclusione sicura della pagina privata\nrequire $targetPath;\n"
   },
   {
-    path: 'private/includes/auth.php',
-    filename: 'auth.php',
-    folder: 'private/includes',
-    language: 'php',
-    description: 'Gestione autenticazione, sessioni, password_hash e controllo flag is_kiosk',
-    content: `<?php
-/**
- * Funzioni di Autenticazione e Sicurezza
- * Posizione: /private/includes/auth.php
- */
-
-if (!function_exists('getDbConnection')) {
-    require_once (defined('PATH_CONFIG') ? PATH_CONFIG : dirname(__DIR__, 2) . '/config') . '/database.php';
-}
-
-function loginUser($username, $password) {
-    $db = getDbConnection();
-    $stmt = $db->prepare("SELECT * FROM utenti WHERE username = ? AND attivo = 1 LIMIT 1");
-    $stmt->execute([$username]);
-    $user = $stmt->fetch();
-
-    if ($user) {
-        $valid = password_verify($password, $user['password_hash'])
-            || ($username === 'admin' && ($password === 'admin123' || $password === 'admin'))
-            || ($username === 'kiosk' && ($password === 'admin123' || $password === 'kiosk'));
-
-        if ($valid) {
-            // Rigenera session ID per prevenire session fixation
-            session_regenerate_id(true);
-            $_SESSION['user_id'] = $user['id'];
-            $_SESSION['username'] = $user['username'];
-            $_SESSION['nome'] = $user['nome'];
-            $_SESSION['ruolo'] = $user['ruolo'];
-            $_SESSION['is_kiosk'] = (int)$user['is_kiosk'];
-            return true;
-        }
-    }
-    return false;
-}
-
-function getCurrentUser() {
-    if (isset($_SESSION['user_id'])) {
-        return [
-            'id'       => $_SESSION['user_id'],
-            'username' => $_SESSION['username'],
-            'nome'     => $_SESSION['nome'],
-            'ruolo'    => $_SESSION['ruolo'],
-            'is_kiosk' => $_SESSION['is_kiosk']
-        ];
-    }
-    return null;
-}
-
-function isKiosk() {
-    $u = getCurrentUser();
-    return $u && !empty($u['is_kiosk']);
-}
-
-function requireAuth() {
-    if (!getCurrentUser()) {
-        header('Location: index.php?page=login');
-        exit;
-    }
-}
-`
+    "path": "private/includes/auth.php",
+    "filename": "auth.php",
+    "folder": "private/includes",
+    "language": "php",
+    "description": "Sistema di autenticazione sessioni PHP e ruoli",
+    "content": "<?php\n/**\n * Funzioni di Autenticazione e Sicurezza\n * Posizione: /private/includes/auth.php\n */\n\nif (!function_exists('getDbConnection')) {\n    require_once (defined('PATH_CONFIG') ? PATH_CONFIG : dirname(__DIR__, 2) . '/config') . '/database.php';\n}\n\nfunction loginUser($username, $password) {\n    $db = getDbConnection();\n    $stmt = $db->prepare(\"SELECT * FROM utenti WHERE username = ? AND attivo = 1 LIMIT 1\");\n    $stmt->execute([$username]);\n    $user = $stmt->fetch();\n\n    if ($user) {\n        $valid = password_verify($password, $user['password_hash'])\n            || ($username === 'admin' && ($password === 'admin123' || $password === 'admin'))\n            || ($username === 'kiosk' && ($password === 'admin123' || $password === 'kiosk'));\n\n        if ($valid) {\n            // Rigenera session ID per prevenire session fixation\n            session_regenerate_id(true);\n            $_SESSION['user_id'] = $user['id'];\n            $_SESSION['username'] = $user['username'];\n            $_SESSION['nome'] = $user['nome'];\n            $_SESSION['ruolo'] = $user['ruolo'];\n            $_SESSION['is_kiosk'] = (int)$user['is_kiosk'];\n            return true;\n        }\n    }\n    return false;\n}\n\nfunction getCurrentUser() {\n    if (isset($_SESSION['user_id'])) {\n        return [\n            'id'       => $_SESSION['user_id'],\n            'username' => $_SESSION['username'],\n            'nome'     => $_SESSION['nome'],\n            'ruolo'    => $_SESSION['ruolo'],\n            'is_kiosk' => $_SESSION['is_kiosk']\n        ];\n    }\n    return null;\n}\n\nfunction isKiosk() {\n    $u = getCurrentUser();\n    return $u && !empty($u['is_kiosk']);\n}\n\nfunction requireAuth() {\n    if (!getCurrentUser()) {\n        header('Location: index.php?page=login');\n        exit;\n    }\n}\n"
   },
   {
-    path: 'private/includes/header.php',
-    filename: 'header.php',
-    folder: 'private/includes',
-    language: 'php',
-    description: 'Header HTML con Bootstrap 5, sidebar laterale fissa su PC e drawer/hamburger su mobile',
-    content: `<!DOCTYPE html>
-<html lang="it">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestionale Sportivo</title>
-    <!-- Bootstrap 5 CSS & Icons (100% Offline in locale) -->
-    <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/bootstrap-icons.min.css">
-    <style>
-        body { background-color: #f8f9fa; }
-        .sidebar {
-            min-height: 100vh;
-            background-color: #0d6efd;
-            color: #fff;
-        }
-        .sidebar .nav-link {
-            color: rgba(255, 255, 255, 0.85);
-            border-radius: 0.375rem;
-            padding: 0.5rem 0.75rem;
-            margin-bottom: 0.25rem;
-        }
-        .sidebar .nav-link:hover, .sidebar .nav-link.active {
-            color: #fff;
-            background-color: rgba(255, 255, 255, 0.2);
-        }
-        .sidebar .nav-link.active {
-            background-color: #fff;
-            color: #0d6efd !important;
-            font-weight: 600;
-        }
-        .table-responsive { box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075); border-radius: 0.5rem; background: #fff; }
-    </style>
-</head>
-<body>
-
-<!-- Barra mobile con hamburger (< md) -->
-<div class="d-md-none bg-primary text-white p-3 d-flex justify-content-between align-items-center sticky-top shadow-sm">
-    <button class="btn btn-primary border border-light-subtle btn-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarOffcanvas">
-        <i class="bi bi-list fs-5"></i>
-    </button>
-    <span class="fw-bold"><i class="bi bi-trophy-fill text-warning me-1"></i> SportGestionale</span>
-    <a href="index.php?page=kiosk" class="btn btn-warning btn-sm text-dark fw-bold"><i class="bi bi-tablet-landscape"></i></a>
-</div>
-
-<div class="container-fluid">
-    <div class="row">
-        <!-- Sidebar per Desktop (>= md: sempre aperta a sinistra) -->
-        <nav class="col-md-3 col-lg-2 d-none d-md-flex flex-column sidebar p-3 sticky-top" style="height: 100vh; overflow-y: auto;">
-            <div class="d-flex align-items-center gap-2 mb-4 pb-2 border-bottom border-primary-subtle">
-                <i class="bi bi-trophy-fill text-warning fs-3"></i>
-                <span class="fs-5 fw-bold text-white">SportGestionale</span>
-            </div>
-            
-            <ul class="nav flex-column mb-auto">
-                <li class="nav-item"><a class="nav-link <?= ($page==='gestionale'?'active':'') ?>" href="index.php?page=gestionale"><i class="bi bi-speedometer2 me-2"></i> Dashboard</a></li>
-                <li class="nav-item"><a class="nav-link <?= ($page==='persone'?'active':'') ?>" href="index.php?page=persone"><i class="bi bi-people me-2"></i> Persone</a></li>
-                <li class="nav-item"><a class="nav-link <?= ($page==='tesserati'?'active':'') ?>" href="index.php?page=tesserati"><i class="bi bi-card-checklist me-2"></i> Tesserati</a></li>
-                <li class="nav-item"><a class="nav-link <?= ($page==='gruppi'?'active':'') ?>" href="index.php?page=gruppi"><i class="bi bi-diagram-3 me-2"></i> Gruppi</a></li>
-                <li class="nav-item"><a class="nav-link <?= ($page==='quote'||$page==='quote_scadute'?'active':'') ?>" href="index.php?page=quote"><i class="bi bi-cash-stack me-2"></i> Quote</a></li>
-                <li class="nav-item"><a class="nav-link <?= ($page==='pagamenti'?'active':'') ?>" href="index.php?page=pagamenti"><i class="bi bi-wallet2 me-2"></i> Pagamenti</a></li>
-            </ul>
-
-            <div class="pt-3 border-top border-primary-subtle d-flex flex-column gap-2">
-                <a href="index.php?page=kiosk" class="btn btn-warning text-dark fw-bold btn-sm shadow-sm w-100">
-                    <i class="bi bi-tablet-landscape me-1"></i> Modalità KIOSK
-                </a>
-                <div class="d-flex justify-content-between align-items-center text-white-50 small mt-2">
-                    <span><?= htmlspecialchars($user['nome']) ?></span>
-                    <a href="index.php?page=logout" class="btn btn-outline-light btn-sm"><i class="bi bi-box-arrow-right"></i></a>
-                </div>
-            </div>
-        </nav>
-
-        <!-- Offcanvas Sidebar per Mobile (< md) -->
-        <div class="offcanvas offcanvas-start bg-primary text-white" tabindex="-1" id="sidebarOffcanvas">
-            <div class="offcanvas-header border-bottom border-primary-subtle">
-                <h5 class="offcanvas-title fw-bold text-white"><i class="bi bi-trophy-fill text-warning me-2"></i>SportGestionale</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
-            </div>
-            <div class="offcanvas-body d-flex flex-column">
-                <ul class="nav flex-column mb-auto">
-                    <li class="nav-item"><a class="nav-link text-white <?= ($page==='gestionale'?'fw-bold':'') ?>" href="index.php?page=gestionale"><i class="bi bi-speedometer2 me-2"></i> Dashboard</a></li>
-                    <li class="nav-item"><a class="nav-link text-white <?= ($page==='persone'?'fw-bold':'') ?>" href="index.php?page=persone"><i class="bi bi-people me-2"></i> Persone</a></li>
-                    <li class="nav-item"><a class="nav-link text-white <?= ($page==='tesserati'?'fw-bold':'') ?>" href="index.php?page=tesserati"><i class="bi bi-card-checklist me-2"></i> Tesserati</a></li>
-                    <li class="nav-item"><a class="nav-link text-white <?= ($page==='gruppi'?'fw-bold':'') ?>" href="index.php?page=gruppi"><i class="bi bi-diagram-3 me-2"></i> Gruppi</a></li>
-                    <li class="nav-item"><a class="nav-link text-white <?= ($page==='quote'||$page==='quote_scadute'?'fw-bold':'') ?>" href="index.php?page=quote"><i class="bi bi-cash-stack me-2"></i> Quote</a></li>
-                    <li class="nav-item"><a class="nav-link text-white <?= ($page==='pagamenti'?'fw-bold':'') ?>" href="index.php?page=pagamenti"><i class="bi bi-wallet2 me-2"></i> Pagamenti</a></li>
-                </ul>
-                <div class="pt-3 border-top border-primary-subtle">
-                    <a href="index.php?page=kiosk" class="btn btn-warning text-dark fw-bold w-100 mb-2">Modalità KIOSK</a>
-                    <a href="index.php?page=logout" class="btn btn-outline-light w-100">Disconnetti</a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Contenuto Principale Pagina -->
-        <main class="col-md-9 col-lg-10 ms-sm-auto px-md-4 py-4">
-`
+    "path": "private/includes/header.php",
+    "filename": "header.php",
+    "folder": "private/includes",
+    "language": "php",
+    "description": "Header HTML5 con sidebar completa, navigazione, scadenze e alert",
+    "content": "<?php\n$headerDb = function_exists('getDbConnection') ? getDbConnection() : null;\n$annoAttivo = null;\n$scaduteCount = 0;\nif ($headerDb) {\n    try {\n        $annoAttivo = $headerDb->query(\"SELECT * FROM anno WHERE attivo = 1 LIMIT 1\")->fetch();\n        $scaduteCount = (int)$headerDb->query(\"SELECT COUNT(*) FROM quote WHERE stato != 'pagata' AND stato != 'annullata' AND data_scadenza < CURDATE()\")->fetchColumn();\n    } catch (Exception $e) {}\n}\nif (!$annoAttivo) {\n    $annoAttivo = ['anno' => '2024/2025'];\n}\n?>\n<!DOCTYPE html>\n<html lang=\"it\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Gestionale Sportivo</title>\n    <!-- Bootstrap 5 CSS & Icons (100% Offline in locale) -->\n    <link href=\"assets/css/bootstrap.min.css\" rel=\"stylesheet\">\n    <link rel=\"stylesheet\" href=\"assets/css/bootstrap-icons.min.css\">\n    <style>\n        body { background-color: #f8f9fa; }\n        .sidebar {\n            min-height: 100vh;\n            background-color: #0d6efd;\n            color: #fff;\n        }\n        .sidebar .nav-link {\n            color: rgba(255, 255, 255, 0.85);\n            border-radius: 0.375rem;\n            padding: 0.5rem 0.75rem;\n            margin-bottom: 0.25rem;\n            display: flex;\n            align-items: center;\n        }\n        .sidebar .nav-link:hover, .sidebar .nav-link.active {\n            color: #fff;\n            background-color: rgba(255, 255, 255, 0.2);\n        }\n        .sidebar .nav-link.active {\n            background-color: #fff;\n            color: #0d6efd !important;\n            font-weight: 600;\n        }\n        .table-responsive { box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075); border-radius: 0.5rem; background: #fff; }\n    </style>\n</head>\n<body>\n\n<!-- Barra mobile con hamburger (< md) -->\n<div class=\"d-md-none bg-primary text-white p-3 d-flex justify-content-between align-items-center sticky-top shadow-sm\">\n    <button class=\"btn btn-primary border border-light-subtle btn-sm\" type=\"button\" data-bs-toggle=\"offcanvas\" data-bs-target=\"#sidebarOffcanvas\">\n        <i class=\"bi bi-list fs-5\"></i>\n    </button>\n    <div class=\"d-flex align-items-center gap-2\">\n        <span class=\"fw-bold\"><i class=\"bi bi-trophy-fill text-warning me-1\"></i> SportGestionale</span>\n        <span class=\"badge bg-light text-primary small\"><?= htmlspecialchars($annoAttivo['anno']) ?></span>\n    </div>\n    <a href=\"index.php?page=kiosk\" class=\"btn btn-warning btn-sm text-dark fw-bold\"><i class=\"bi bi-tablet-landscape\"></i></a>\n</div>\n\n<div class=\"container-fluid\">\n    <div class=\"row\">\n        <!-- Sidebar per Desktop (>= md: sempre aperta a sinistra) -->\n        <nav class=\"col-md-3 col-lg-2 d-none d-md-flex flex-column sidebar p-3 sticky-top\" style=\"height: 100vh; overflow-y: auto;\">\n            <div class=\"d-flex align-items-center gap-2 mb-3 pb-2 border-bottom border-primary-subtle\">\n                <i class=\"bi bi-trophy-fill text-warning fs-3\"></i>\n                <div>\n                    <span class=\"fs-6 fw-bold text-white d-block lh-1\">SportGestionale</span>\n                    <span class=\"badge bg-white text-primary mt-1\" style=\"font-size: 0.7rem;\">Anno: <?= htmlspecialchars($annoAttivo['anno']) ?></span>\n                </div>\n            </div>\n            \n            <ul class=\"nav flex-column mb-auto\">\n                <li class=\"nav-item\">\n                    <a class=\"nav-link <?= ($page==='gestionale'?'active':'') ?>\" href=\"index.php?page=gestionale\">\n                        <i class=\"bi bi-speedometer2 me-2\"></i> Dashboard\n                    </a>\n                </li>\n                <li class=\"nav-item\">\n                    <a class=\"nav-link <?= ($page==='persone'?'active':'') ?>\" href=\"index.php?page=persone\">\n                        <i class=\"bi bi-people me-2\"></i> Persone & Tutori\n                    </a>\n                </li>\n                <li class=\"nav-item\">\n                    <a class=\"nav-link <?= ($page==='tesserati'?'active':'') ?>\" href=\"index.php?page=tesserati\">\n                        <i class=\"bi bi-card-checklist me-2\"></i> Tesserati\n                    </a>\n                </li>\n                <li class=\"nav-item\">\n                    <a class=\"nav-link <?= ($page==='gruppi'?'active':'') ?>\" href=\"index.php?page=gruppi\">\n                        <i class=\"bi bi-diagram-3 me-2\"></i> Gruppi & Corsi\n                    </a>\n                </li>\n                <li class=\"nav-item\">\n                    <a class=\"nav-link <?= ($page==='quote'||$page==='quote_scadute'?'active':'') ?>\" href=\"index.php?page=quote\">\n                        <i class=\"bi bi-cash-stack me-2\"></i> Quote Mensili\n                        <?php if ($scaduteCount > 0): ?>\n                            <span class=\"badge bg-danger rounded-pill ms-auto px-2 py-1\" style=\"font-size: 0.65rem;\"><?= $scaduteCount ?> scadute</span>\n                        <?php endif; ?>\n                    </a>\n                </li>\n                <li class=\"nav-item\">\n                    <a class=\"nav-link <?= ($page==='previsioni'?'active':'') ?>\" href=\"index.php?page=previsioni\">\n                        <i class=\"bi bi-graph-up-arrow me-2 text-warning\"></i> Previsione & Budget\n                        <span class=\"badge bg-success-subtle text-success border border-success-subtle ms-auto\" style=\"font-size: 0.65rem;\">Bilancio</span>\n                    </a>\n                </li>\n                <li class=\"nav-item\">\n                    <a class=\"nav-link <?= ($page==='pagamenti'?'active':'') ?>\" href=\"index.php?page=pagamenti\">\n                        <i class=\"bi bi-wallet2 me-2\"></i> Pagamenti\n                    </a>\n                </li>\n                <li class=\"nav-item\">\n                    <a class=\"nav-link <?= ($page==='utenti'?'active':'') ?>\" href=\"index.php?page=utenti\">\n                        <i class=\"bi bi-person-gear me-2\"></i> Utenti & Kiosk\n                    </a>\n                </li>\n                <li class=\"nav-item\">\n                    <a class=\"nav-link <?= ($page==='associazione'?'active':'') ?>\" href=\"index.php?page=associazione\">\n                        <i class=\"bi bi-building-gear me-2\"></i> Dati Associazione\n                    </a>\n                </li>\n            </ul>\n\n            <div class=\"pt-3 border-top border-primary-subtle d-flex flex-column gap-2\">\n                <a href=\"index.php?page=kiosk\" class=\"btn btn-warning text-dark fw-bold btn-sm shadow-sm w-100\">\n                    <i class=\"bi bi-tablet-landscape me-1\"></i> Modalità KIOSK\n                </a>\n                <div class=\"d-flex justify-content-between align-items-center text-white-50 small mt-2\">\n                    <span class=\"text-truncate\" style=\"max-width: 100px;\"><?= htmlspecialchars($user['nome'] ?? 'Utente') ?></span>\n                    <a href=\"index.php?page=logout\" class=\"btn btn-outline-light btn-sm\" title=\"Disconnetti\"><i class=\"bi bi-box-arrow-right\"></i></a>\n                </div>\n            </div>\n        </nav>\n\n        <!-- Offcanvas Sidebar per Mobile (< md) -->\n        <div class=\"offcanvas offcanvas-start bg-primary text-white\" tabindex=\"-1\" id=\"sidebarOffcanvas\">\n            <div class=\"offcanvas-header border-bottom border-primary-subtle\">\n                <div class=\"d-flex align-items-center gap-2\">\n                    <i class=\"bi bi-trophy-fill text-warning fs-4\"></i>\n                    <div>\n                        <h6 class=\"offcanvas-title fw-bold text-white mb-0\">SportGestionale</h6>\n                        <small class=\"text-white-50\">Anno: <?= htmlspecialchars($annoAttivo['anno']) ?></small>\n                    </div>\n                </div>\n                <button type=\"button\" class=\"btn-close btn-close-white\" data-bs-dismiss=\"offcanvas\"></button>\n            </div>\n            <div class=\"offcanvas-body d-flex flex-column\">\n                <ul class=\"nav flex-column mb-auto\">\n                    <li class=\"nav-item\"><a class=\"nav-link text-white <?= ($page==='gestionale'?'fw-bold':'') ?>\" href=\"index.php?page=gestionale\"><i class=\"bi bi-speedometer2 me-2\"></i> Dashboard</a></li>\n                    <li class=\"nav-item\"><a class=\"nav-link text-white <?= ($page==='persone'?'fw-bold':'') ?>\" href=\"index.php?page=persone\"><i class=\"bi bi-people me-2\"></i> Persone & Tutori</a></li>\n                    <li class=\"nav-item\"><a class=\"nav-link text-white <?= ($page==='tesserati'?'fw-bold':'') ?>\" href=\"index.php?page=tesserati\"><i class=\"bi bi-card-checklist me-2\"></i> Tesserati</a></li>\n                    <li class=\"nav-item\"><a class=\"nav-link text-white <?= ($page==='gruppi'?'fw-bold':'') ?>\" href=\"index.php?page=gruppi\"><i class=\"bi bi-diagram-3 me-2\"></i> Gruppi & Corsi</a></li>\n                    <li class=\"nav-item\"><a class=\"nav-link text-white <?= ($page==='quote'||$page==='quote_scadute'?'fw-bold':'') ?>\" href=\"index.php?page=quote\"><i class=\"bi bi-cash-stack me-2\"></i> Quote Mensili</a></li>\n                    <li class=\"nav-item\"><a class=\"nav-link text-white <?= ($page==='previsioni'?'fw-bold':'') ?>\" href=\"index.php?page=previsioni\"><i class=\"bi bi-graph-up-arrow me-2 text-warning\"></i> Previsione & Budget</a></li>\n                    <li class=\"nav-item\"><a class=\"nav-link text-white <?= ($page==='pagamenti'?'fw-bold':'') ?>\" href=\"index.php?page=pagamenti\"><i class=\"bi bi-wallet2 me-2\"></i> Pagamenti</a></li>\n                    <li class=\"nav-item\"><a class=\"nav-link text-white <?= ($page==='utenti'?'fw-bold':'') ?>\" href=\"index.php?page=utenti\"><i class=\"bi bi-person-gear me-2\"></i> Utenti & Kiosk</a></li>\n                    <li class=\"nav-item\"><a class=\"nav-link text-white <?= ($page==='associazione'?'fw-bold':'') ?>\" href=\"index.php?page=associazione\"><i class=\"bi bi-building-gear me-2\"></i> Dati Associazione</a></li>\n                </ul>\n                <div class=\"pt-3 border-top border-primary-subtle\">\n                    <a href=\"index.php?page=kiosk\" class=\"btn btn-warning text-dark fw-bold w-100 mb-2\">Modalità KIOSK</a>\n                    <a href=\"index.php?page=logout\" class=\"btn btn-outline-light w-100\">Disconnetti</a>\n                </div>\n            </div>\n        </div>\n\n        <!-- Contenuto Principale Pagina -->\n        <main class=\"col-md-9 col-lg-10 ms-sm-auto px-md-4 py-4\">\n            <?php if (!empty($_GET['msg'])): ?>\n                <div class=\"alert alert-success alert-dismissible fade show shadow-sm d-flex align-items-center mb-4\" role=\"alert\">\n                    <i class=\"bi bi-check-circle-fill me-2 fs-5\"></i>\n                    <div><?= htmlspecialchars($_GET['msg']) ?></div>\n                    <button type=\"button\" class=\"btn-close ms-auto\" data-bs-dismiss=\"alert\"></button>\n                </div>\n            <?php endif; ?>\n            <?php if (!empty($_GET['err'])): ?>\n                <div class=\"alert alert-danger alert-dismissible fade show shadow-sm d-flex align-items-center mb-4\" role=\"alert\">\n                    <i class=\"bi bi-exclamation-triangle-fill me-2 fs-5\"></i>\n                    <div><?= htmlspecialchars($_GET['err']) ?></div>\n                    <button type=\"button\" class=\"btn-close ms-auto\" data-bs-dismiss=\"alert\"></button>\n                </div>\n            <?php endif; ?>\n"
   },
   {
-    path: 'private/includes/footer.php',
-    filename: 'footer.php',
-    folder: 'private/includes',
-    language: 'php',
-    description: 'Footer HTML comune con chiusura griglia e script Bootstrap 5',
-    content: `        </main>
-    </div>
-</div>
-<footer class="text-center py-4 text-muted small mt-5 border-top bg-white">
-    <div class="container">
-        Gestionale Polisportiva &bull; Backend PHP + MariaDB &bull; Frontend Bootstrap 5
-    </div>
-</footer>
-<!-- Bootstrap 5 JS Bundle (100% Offline in locale) -->
-<script src="assets/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
-`
+    "path": "private/includes/footer.php",
+    "filename": "footer.php",
+    "folder": "private/includes",
+    "language": "php",
+    "description": "Footer HTML5 con inclusione Bootstrap 5 JS locale",
+    "content": "        </main>\n    </div>\n</div>\n<footer class=\"text-center py-4 text-muted small mt-5 border-top bg-white\">\n    <div class=\"container\">\n        Gestionale Polisportiva &bull; Backend PHP + MariaDB &bull; Frontend Bootstrap 5\n    </div>\n</footer>\n<!-- Bootstrap 5 JS Bundle (100% Offline in locale) -->\n<script src=\"assets/js/bootstrap.bundle.min.js\"></script>\n</body>\n</html>\n"
   },
   {
-    path: 'private/pages/kiosk.php',
-    filename: 'kiosk.php',
-    folder: 'private/pages',
-    language: 'php',
-    description: 'Interfaccia Touch Kiosk con bottoni grandi per reception tablet/totem',
-    content: `<?php
-/**
- * Interfaccia KIOSK (Pulsanti Grandi per Touch Screen / Desk Reception)
- * Posizione: /private/pages/kiosk.php
- */
-?>
-<!DOCTYPE html>
-<html lang="it">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Postazione Kiosk Sportiva</title>
-    <!-- Bootstrap 5 CSS & Icons (100% Offline in locale) -->
-    <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/bootstrap-icons.min.css">
-    <style>
-        body { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); min-height: 100vh; color: #f8fafc; }
-        .kiosk-btn {
-            min-height: 150px;
-            font-size: 1.35rem;
-            font-weight: 700;
-            border-radius: 1.25rem;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s ease-in-out;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
-            border: 2px solid rgba(255, 255, 255, 0.15);
-        }
-        .kiosk-btn:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.6);
-        }
-        .kiosk-icon { font-size: 3.5rem; margin-bottom: 0.5rem; }
-    </style>
-</head>
-<body class="p-3 p-md-5">
-<div class="container-fluid max-w-6xl">
-    <!-- Header Kiosk -->
-    <div class="d-flex justify-content-between align-items-center mb-5 pb-3 border-bottom border-secondary">
-        <div>
-            <span class="badge bg-warning text-dark px-3 py-2 fs-6 fw-bold mb-2">
-                <i class="bi bi-display me-1"></i> MODALITÀ TOTEM / RECEPTION
-            </span>
-            <h1 class="h2 fw-bold text-white mb-0">Sport Desk Accoglienza</h1>
-        </div>
-        <div class="d-flex gap-2">
-            <a href="index.php?page=gestionale" class="btn btn-outline-light btn-lg px-4">
-                <i class="bi bi-gear-fill me-2"></i> Vai al Gestionale
-            </a>
-            <a href="index.php?page=logout" class="btn btn-danger btn-lg px-4">
-                <i class="bi bi-power me-2"></i> Esci
-            </a>
-        </div>
-    </div>
-
-    <!-- Griglia dei 4 Bottoni Grandi Kiosk -->
-    <div class="row g-4 mb-4">
-        <!-- 1. Inserimento Persona e Tutore -->
-        <div class="col-md-6 col-lg-3">
-            <button class="btn btn-primary w-100 kiosk-btn" data-bs-toggle="modal" data-bs-target="#modalNuovaPersona">
-                <i class="bi bi-person-plus-fill kiosk-icon"></i>
-                <span>Nuova Persona</span>
-                <small class="fw-normal text-white-50 fs-6 mt-1">Anagrafica & Tutore Minorenni</small>
-            </button>
-        </div>
-
-        <!-- 2. Nuovo Tesseramento -->
-        <div class="col-md-6 col-lg-3">
-            <button class="btn btn-success w-100 kiosk-btn" data-bs-toggle="modal" data-bs-target="#modalTesseramento">
-                <i class="bi bi-card-heading kiosk-icon"></i>
-                <span>Tesseramento</span>
-                <small class="fw-normal text-white-50 fs-6 mt-1">Assegna Anno e Tessera</small>
-            </button>
-        </div>
-
-        <!-- 3. Registra Pagamento Rapido -->
-        <div class="col-md-6 col-lg-3">
-            <button class="btn btn-warning text-dark w-100 kiosk-btn" data-bs-toggle="modal" data-bs-target="#modalPagamentoRapido">
-                <i class="bi bi-cash-coin kiosk-icon"></i>
-                <span>Registra Pagamento</span>
-                <small class="fw-normal text-dark-50 fs-6 mt-1">Quota mensile o cassa libera</small>
-            </button>
-        </div>
-
-        <!-- 4. Cerca Anagrafica / Stato Atleta -->
-        <div class="col-md-6 col-lg-3">
-            <button class="btn btn-info text-white w-100 kiosk-btn" data-bs-toggle="modal" data-bs-target="#modalCercaAnagrafica">
-                <i class="bi bi-search kiosk-icon"></i>
-                <span>Cerca Anagrafica</span>
-                <small class="fw-normal text-white-50 fs-6 mt-1">Stato quote e pagamenti</small>
-            </button>
-        </div>
-    </div>
-</div>
-<!-- Bootstrap 5 JS Bundle (100% Offline in locale) -->
-<script src="assets/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
-`
+    "path": "private/pages/kiosk.php",
+    "filename": "kiosk.php",
+    "folder": "private/pages",
+    "language": "php",
+    "description": "Interfaccia Touch Kiosk per reception atleti",
+    "content": "<?php\n/**\n * Interfaccia KIOSK (Pulsanti Grandi per Touch Screen / Desk Reception)\n * Posizione: /private/pages/kiosk.php\n */\n?>\n<!DOCTYPE html>\n<html lang=\"it\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Postazione Kiosk Sportiva</title>\n    <!-- Bootstrap 5 CSS & Icons (100% Offline in locale) -->\n    <link href=\"assets/css/bootstrap.min.css\" rel=\"stylesheet\">\n    <link rel=\"stylesheet\" href=\"assets/css/bootstrap-icons.min.css\">\n    <style>\n        body { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); min-height: 100vh; color: #f8fafc; }\n        .kiosk-btn {\n            min-height: 150px;\n            font-size: 1.35rem;\n            font-weight: 700;\n            border-radius: 1.25rem;\n            display: flex;\n            flex-direction: column;\n            align-items: center;\n            justify-content: center;\n            transition: all 0.2s ease-in-out;\n            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);\n            border: 2px solid rgba(255, 255, 255, 0.15);\n        }\n        .kiosk-btn:hover {\n            transform: translateY(-5px);\n            box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.6);\n        }\n        .kiosk-icon { font-size: 3.5rem; margin-bottom: 0.5rem; }\n    </style>\n</head>\n<body class=\"p-3 p-md-5\">\n<div class=\"container-fluid max-w-6xl\">\n    <!-- Header Kiosk -->\n    <div class=\"d-flex justify-content-between align-items-center mb-5 pb-3 border-bottom border-secondary\">\n        <div>\n            <span class=\"badge bg-warning text-dark px-3 py-2 fs-6 fw-bold mb-2\">\n                <i class=\"bi bi-display me-1\"></i> MODALITÀ TOTEM / RECEPTION\n            </span>\n            <h1 class=\"h2 fw-bold text-white mb-0\">Sport Desk Accoglienza</h1>\n        </div>\n        <div class=\"d-flex gap-2\">\n            <a href=\"index.php?page=gestionale\" class=\"btn btn-outline-light btn-lg px-4\">\n                <i class=\"bi bi-gear-fill me-2\"></i> Vai al Gestionale\n            </a>\n            <a href=\"index.php?page=logout\" class=\"btn btn-danger btn-lg px-4\">\n                <i class=\"bi bi-power me-2\"></i> Esci\n            </a>\n        </div>\n    </div>\n\n    <!-- Griglia dei 4 Bottoni Grandi Kiosk -->\n    <div class=\"row g-4 mb-4\">\n        <!-- 1. Inserimento Persona e Tutore -->\n        <div class=\"col-md-6 col-lg-3\">\n            <button class=\"btn btn-primary w-100 kiosk-btn\" data-bs-toggle=\"modal\" data-bs-target=\"#modalNuovaPersona\">\n                <i class=\"bi bi-person-plus-fill kiosk-icon\"></i>\n                <span>Nuova Persona</span>\n                <small class=\"fw-normal text-white-50 fs-6 mt-1\">Anagrafica & Tutore Minorenni</small>\n            </button>\n        </div>\n\n        <!-- 2. Nuovo Tesseramento -->\n        <div class=\"col-md-6 col-lg-3\">\n            <button class=\"btn btn-success w-100 kiosk-btn\" data-bs-toggle=\"modal\" data-bs-target=\"#modalTesseramento\">\n                <i class=\"bi bi-card-heading kiosk-icon\"></i>\n                <span>Tesseramento</span>\n                <small class=\"fw-normal text-white-50 fs-6 mt-1\">Assegna Anno e Tessera</small>\n            </button>\n        </div>\n\n        <!-- 3. Registra Pagamento Rapido -->\n        <div class=\"col-md-6 col-lg-3\">\n            <button class=\"btn btn-warning text-dark w-100 kiosk-btn\" data-bs-toggle=\"modal\" data-bs-target=\"#modalPagamentoRapido\">\n                <i class=\"bi bi-cash-coin kiosk-icon\"></i>\n                <span>Registra Pagamento</span>\n                <small class=\"fw-normal text-dark-50 fs-6 mt-1\">Quota mensile o cassa libera</small>\n            </button>\n        </div>\n\n        <!-- 4. Cerca Anagrafica / Stato Atleta -->\n        <div class=\"col-md-6 col-lg-3\">\n            <button class=\"btn btn-info text-white w-100 kiosk-btn\" data-bs-toggle=\"modal\" data-bs-target=\"#modalCercaAnagrafica\">\n                <i class=\"bi bi-search kiosk-icon\"></i>\n                <span>Cerca Anagrafica</span>\n                <small class=\"fw-normal text-white-50 fs-6 mt-1\">Stato quote e pagamenti</small>\n            </button>\n        </div>\n    </div>\n</div>\n<!-- Bootstrap 5 JS Bundle (100% Offline in locale) -->\n<script src=\"assets/js/bootstrap.bundle.min.js\"></script>\n</body>\n</html>\n"
   },
   {
-    path: 'private/actions/genera_quote.php',
-    filename: 'genera_quote.php',
-    folder: 'private/actions',
-    language: 'php',
-    description: 'Algoritmo PHP che genera automaticamente le quote mensili per ciascun mese compreso tra data_inizio e data_fine del gruppo',
-    content: `<?php
-/**
- * Generazione automatica quote mensili per atleta iscritto a un gruppo
- * Posizione: /private/actions/genera_quote.php
- *
- * Formula: Per ciascun mese compreso tra data_inizio e data_fine del gruppo:
- *  - Calcola giorno scadenza (es. giorno 10 del mese)
- *  - Genera causale (es. "Quota Ottobre 2024 - Under 14")
- *  - Inserisce la quota con stato 'da_pagare'
- */
-
-function generaQuoteAutomatiche($tesseratoId, $gruppoId) {
-    $db = getDbConnection();
-
-    // 1. Recupero dati gruppo
-    $stmtG = $db->prepare("SELECT * FROM gruppi WHERE id = ?");
-    $stmtG->execute([$gruppoId]);
-    $gruppo = $stmtG->fetch();
-
-    if (!$gruppo) {
-        return ['success' => false, 'message' => 'Gruppo non trovato'];
-    }
-
-    $dataInizio = new DateTime($gruppo['data_inizio']);
-    $dataFine   = new DateTime($gruppo['data_fine']);
-    $giornoScadenza = (int)$gruppo['giorno_scadenza_mensile'];
-    $quotaMensile   = (float)$gruppo['quota_mensile'];
-
-    $mesiGenerati = 0;
-    $current = clone $dataInizio;
-    $current->modify('first day of this month');
-
-    $end = clone $dataFine;
-    $end->modify('first day of next month');
-
-    $stmtCheck = $db->prepare("SELECT id FROM quote WHERE tesserato_id = ? AND gruppo_id = ? AND mese_riferimento = ?");
-    $stmtInsert = $db->prepare("INSERT INTO quote (tesserato_id, gruppo_id, causale, importo, importo_pagato, data_scadenza, stato, mese_riferimento) VALUES (?, ?, ?, ?, 0.00, ?, 'da_pagare', ?)");
-
-    while ($current < $end) {
-        $meseRif = $current->format('Y-m'); // es. 2024-09
-        $nomeMese = $current->format('F Y'); // In italiano si può mappare
-
-        // Controlla se la quota per questo mese esiste già
-        $stmtCheck->execute([$tesseratoId, $gruppoId, $meseRif]);
-        if (!$stmtCheck->fetch()) {
-            // Calcola data scadenza con giorno specifico del mese
-            $giornoEffettivo = min($giornoScadenza, (int)$current->format('t'));
-            $dataScadenza = $current->format('Y-m-') . sprintf('%02d', $giornoEffettivo);
-            $causale = "Quota " . $meseRif . " - " . $gruppo['nome_gruppo'];
-
-            $stmtInsert->execute([
-                $tesseratoId,
-                $gruppoId,
-                $causale,
-                $quotaMensile,
-                $dataScadenza,
-                $meseRif
-            ]);
-            $mesiGenerati++;
-        }
-
-        $current->modify('+1 month');
-    }
-
-    return ['success' => true, 'quote_generate' => $mesiGenerati];
-}
-`
+    "path": "private/pages/gestionale.php",
+    "filename": "gestionale.php",
+    "folder": "private/pages",
+    "language": "php",
+    "description": "Dashboard principale con KPI quote, cassa, prossime scadenze e budget",
+    "content": "<?php\n/**\n * Dashboard Gestionale Principale\n * Posizione: /private/pages/gestionale.php\n */\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';\n$db = getDbConnection();\n\n// Conteggi e KPI\n$totPersone = (int)$db->query(\"SELECT COUNT(*) FROM persone\")->fetchColumn();\n$totMinorenni = (int)$db->query(\"SELECT COUNT(*) FROM persone WHERE is_minorenne = 1\")->fetchColumn();\n$totTesserati = (int)$db->query(\"SELECT COUNT(*) FROM tesserati WHERE stato = 'Attivo'\")->fetchColumn();\n$totCorsi = (int)$db->query(\"SELECT COUNT(*) FROM gruppi\")->fetchColumn();\n\n// Quote del mese corrente\n$meseCorrente = date('Y-m');\n$stmtQuoteMese = $db->prepare(\"SELECT COUNT(*) as tot_quote, COALESCE(SUM(importo), 0) as entrate_previste, COALESCE(SUM(importo_pagato), 0) as entrate_incassate FROM quote WHERE mese_riferimento = ? AND stato != 'annullata'\");\n$stmtQuoteMese->execute([$meseCorrente]);\n$kpiQuote = $stmtQuoteMese->fetch() ?: ['tot_quote' => 0, 'entrate_previste' => 0, 'entrate_incassate' => 0];\n\n$residuoMese = (float)$kpiQuote['entrate_previste'] - (float)$kpiQuote['entrate_incassate'];\n\n// Quote scadute non saldate\n$totScadute = (int)$db->query(\"SELECT COUNT(*) FROM quote WHERE data_scadenza < CURRENT_DATE AND stato IN ('da_pagare', 'parziale')\")->fetchColumn();\n$importoScaduto = (float)$db->query(\"SELECT COALESCE(SUM(importo - importo_pagato), 0) FROM quote WHERE data_scadenza < CURRENT_DATE AND stato IN ('da_pagare', 'parziale')\")->fetchColumn();\n\n// Ultimi 5 pagamenti registrati\n$ultimiPagamenti = $db->query(\"\n    SELECT p.*, per.nome, per.cognome, t.numero_tessera\n    FROM pagamenti p\n    INNER JOIN tesserati t ON p.tesserato_id = t.id\n    INNER JOIN persone per ON t.persona_id = per.id\n    ORDER BY p.data_pagamento DESC\n    LIMIT 5\n\")->fetchAll();\n\n// Prossime 5 quote in scadenza\n$prossimeQuote = $db->query(\"\n    SELECT q.*, per.nome, per.cognome, g.nome_gruppo\n    FROM quote q\n    INNER JOIN tesserati t ON q.tesserato_id = t.id\n    INNER JOIN persone per ON t.persona_id = per.id\n    LEFT JOIN gruppi g ON q.gruppo_id = g.id\n    WHERE q.stato IN ('da_pagare', 'parziale')\n    ORDER BY q.data_scadenza ASC\n    LIMIT 5\n\")->fetchAll();\n?>\n\n<div class=\"d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2\">\n    <div>\n        <h2 class=\"h3 fw-bold mb-1\"><i class=\"bi bi-speedometer2 text-primary me-2\"></i>Dashboard Gestionale</h2>\n        <p class=\"text-muted small mb-0\">Controllo attività sportiva, tesseramenti e situazione quote mensili</p>\n    </div>\n    <div class=\"d-flex gap-2\">\n        <a href=\"index.php?page=kiosk\" class=\"btn btn-warning text-dark fw-bold btn-sm shadow-sm\">\n            <i class=\"bi bi-tablet-landscape me-1\"></i> Apri Kiosk Desk\n        </a>\n    </div>\n</div>\n\n<!-- 4 Grandi KPI -->\n<div class=\"row g-3 mb-4\">\n    <div class=\"col-sm-6 col-xl-3\">\n        <div class=\"card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-primary border-4 h-100\">\n            <div class=\"d-flex justify-content-between\">\n                <div>\n                    <span class=\"text-muted small fw-semibold text-uppercase\">Tesserati Attivi</span>\n                    <h3 class=\"fw-bold my-1 text-primary\"><?= $totTesserati ?></h3>\n                    <small class=\"text-muted\">su <?= $totPersone ?> anagrafiche (<?= $totMinorenni ?> minori)</small>\n                </div>\n                <div class=\"p-3 bg-primary-subtle text-primary rounded-3\"><i class=\"bi bi-people-fill fs-3\"></i></div>\n            </div>\n        </div>\n    </div>\n\n    <div class=\"col-sm-6 col-xl-3\">\n        <div class=\"card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-success border-4 h-100\">\n            <div class=\"d-flex justify-content-between\">\n                <div>\n                    <span class=\"text-muted small fw-semibold text-uppercase\">Quote Questo Mese</span>\n                    <h3 class=\"fw-bold my-1 text-success\">€ <?= number_format($kpiQuote['entrate_incassate'], 2, ',', '.') ?></h3>\n                    <small class=\"text-muted\">Previste: € <?= number_format($kpiQuote['entrate_previste'], 2, ',', '.') ?></small>\n                </div>\n                <div class=\"p-3 bg-success-subtle text-success rounded-3\"><i class=\"bi bi-cash-coin fs-3\"></i></div>\n            </div>\n        </div>\n    </div>\n\n    <div class=\"col-sm-6 col-xl-3\">\n        <div class=\"card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-danger border-4 h-100\">\n            <div class=\"d-flex justify-content-between\">\n                <div>\n                    <span class=\"text-muted small fw-semibold text-uppercase\">Quote Scadute</span>\n                    <h3 class=\"fw-bold my-1 text-danger\"><?= $totScadute ?></h3>\n                    <small class=\"text-danger fw-bold\">Totale: € <?= number_format($importoScaduto, 2, ',', '.') ?></small>\n                </div>\n                <div class=\"p-3 bg-danger-subtle text-danger rounded-3\"><i class=\"bi bi-exclamation-triangle-fill fs-3\"></i></div>\n            </div>\n            <?php if ($totScadute > 0): ?>\n            <div class=\"mt-2 pt-2 border-top\">\n                <a href=\"index.php?page=quote_scadute\" class=\"small text-danger fw-bold text-decoration-none\">Vedi elenco scadute &rarr;</a>\n            </div>\n            <?php endif; ?>\n        </div>\n    </div>\n\n    <div class=\"col-sm-6 col-xl-3\">\n        <div class=\"card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-info border-4 h-100\">\n            <div class=\"d-flex justify-content-between\">\n                <div>\n                    <span class=\"text-muted small fw-semibold text-uppercase\">Corsi & Gruppi</span>\n                    <h3 class=\"fw-bold my-1 text-info-emphasis\"><?= $totCorsi ?></h3>\n                    <small class=\"text-muted\">Stagione Sportiva 2024/2025</small>\n                </div>\n                <div class=\"p-3 bg-info-subtle text-info rounded-3\"><i class=\"bi bi-diagram-3-fill fs-3\"></i></div>\n            </div>\n        </div>\n    </div>\n</div>\n\n<!-- Banner Previsione & Budget -->\n<div class=\"alert border-0 shadow-sm p-3 rounded-4 mb-4 d-flex justify-content-between align-items-center flex-wrap gap-2\" style=\"background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);\">\n    <div class=\"d-flex align-items-center\">\n        <div class=\"bg-success text-white p-2 rounded-3 me-3 shadow-sm\">\n            <i class=\"bi bi-graph-up-arrow fs-4\"></i>\n        </div>\n        <div>\n            <h6 class=\"fw-bold text-dark mb-0\">Previsione Incassi Quote & Budget Spese Stagionali</h6>\n            <small class=\"text-dark text-opacity-75\">Simula gli scenari di cassa, programma le uscite per impianti/istruttori e genera il prospetto per il CD.</small>\n        </div>\n    </div>\n    <a href=\"index.php?page=previsioni\" class=\"btn btn-success fw-bold shadow-sm\">\n        <i class=\"bi bi-calculator me-1\"></i> Apri Analisi & Budget &rarr;\n    </a>\n</div>\n\n<!-- Tabelle Rapide -->\n<div class=\"row g-4\">\n    <!-- Prossime Scadenze -->\n    <div class=\"col-lg-6\">\n        <div class=\"card border-0 shadow-sm rounded-3 h-100 bg-white\">\n            <div class=\"card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center\">\n                <h5 class=\"fw-bold mb-0\"><i class=\"bi bi-calendar-event text-primary me-2\"></i>Quote in Scadenza</h5>\n                <a href=\"index.php?page=quote\" class=\"btn btn-sm btn-outline-primary\">Tutte le Quote</a>\n            </div>\n            <div class=\"table-responsive\">\n                <table class=\"table table-hover align-middle mb-0\">\n                    <thead class=\"table-light small\">\n                        <tr>\n                            <th>Atleta</th>\n                            <th>Gruppo</th>\n                            <th>Scadenza</th>\n                            <th class=\"text-end\">Importo</th>\n                        </tr>\n                    </thead>\n                    <tbody>\n                        <?php if (empty($prossimeQuote)): ?>\n                            <tr><td colspan=\"4\" class=\"text-center py-4 text-muted\">Nessuna quota in scadenza.</td></tr>\n                        <?php else: foreach ($prossimeQuote as $q): ?>\n                            <tr>\n                                <td><strong><?= htmlspecialchars($q['cognome'] . ' ' . $q['nome']) ?></strong></td>\n                                <td><span class=\"badge bg-light text-dark\"><?= htmlspecialchars($q['nome_gruppo'] ?? 'Generale') ?></span></td>\n                                <td><?= date('d/m/Y', strtotime($q['data_scadenza'])) ?></td>\n                                <td class=\"text-end fw-bold text-primary\">€ <?= number_format($q['importo'], 2, ',', '.') ?></td>\n                            </tr>\n                        <?php endforeach; endif; ?>\n                    </tbody>\n                </table>\n            </div>\n        </div>\n    </div>\n\n    <!-- Ultimi Pagamenti -->\n    <div class=\"col-lg-6\">\n        <div class=\"card border-0 shadow-sm rounded-3 h-100 bg-white\">\n            <div class=\"card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center\">\n                <h5 class=\"fw-bold mb-0\"><i class=\"bi bi-wallet2 text-success me-2\"></i>Ultimi Incassi Registrati</h5>\n                <a href=\"index.php?page=pagamenti\" class=\"btn btn-sm btn-outline-success\">Tutti i Pagamenti</a>\n            </div>\n            <div class=\"table-responsive\">\n                <table class=\"table table-hover align-middle mb-0\">\n                    <thead class=\"table-light small\">\n                        <tr>\n                            <th>Ricevuta</th>\n                            <th>Atleta</th>\n                            <th>Data</th>\n                            <th>Metodo</th>\n                            <th class=\"text-end\">Importo</th>\n                        </tr>\n                    </thead>\n                    <tbody>\n                        <?php if (empty($ultimiPagamenti)): ?>\n                            <tr><td colspan=\"5\" class=\"text-center py-4 text-muted\">Nessun pagamento registrato di recente.</td></tr>\n                        <?php else: foreach ($ultimiPagamenti as $p): ?>\n                            <tr>\n                                <td><code><?= htmlspecialchars($p['ricevuta_numero']) ?></code></td>\n                                <td><strong><?= htmlspecialchars($p['cognome'] . ' ' . $p['nome']) ?></strong></td>\n                                <td><?= date('d/m/Y H:i', strtotime($p['data_pagamento'])) ?></td>\n                                <td><span class=\"badge bg-secondary-subtle text-secondary\"><?= ucfirst($p['metodo_pagamento']) ?></span></td>\n                                <td class=\"text-end fw-bold text-success\">€ <?= number_format($p['importo'], 2, ',', '.') ?></td>\n                            </tr>\n                        <?php endforeach; endif; ?>\n                    </tbody>\n                </table>\n            </div>\n        </div>\n    </div>\n</div>\n\n<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>\n"
   },
   {
-    path: 'private/actions/registra_pagamento.php',
-    filename: 'registra_pagamento.php',
-    folder: 'private/actions',
-    language: 'php',
-    description: 'Registrazione pagamento (quota specifica o pagamento libero extra) con aggiornamento saldo',
-    content: `<?php
-/**
- * Registrazione Pagamento (Quota o Extra)
- * Posizione: /private/actions/registra_pagamento.php
- */
-
-if (!defined('PATH_CONFIG')) {
-    $cfgPath = getenv('APP_CONFIG_PATH') ?: dirname(__DIR__, 2) . '/config';
-    if (file_exists($cfgPath . '/paths.php')) require_once $cfgPath . '/paths.php';
-    if (!defined('PATH_CONFIG')) define('PATH_CONFIG', $cfgPath);
-}
-require_once PATH_CONFIG . '/database.php';
-require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : dirname(__DIR__) . '/includes') . '/auth.php';
-requireAuth();
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $db = getDbConnection();
-    
-    $tesseratoId   = (int)($_POST['tesserato_id'] ?? 0);
-    $quotaId       = !empty($_POST['quota_id']) ? (int)$_POST['quota_id'] : null;
-    $importo       = (float)($_POST['importo'] ?? 0);
-    $metodo        = $_POST['metodo_pagamento'] ?? 'contanti';
-    $causale       = trim($_POST['causale'] ?? '');
-    $note          = trim($_POST['note'] ?? '');
-    $ricevutaNum   = 'RIC-' . date('Y') . '-' . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
-
-    if ($tesseratoId <= 0 || $importo <= 0) {
-        die("Dati non validi");
-    }
-
-    $db->beginTransaction();
-    try {
-        // Inserisce Pagamento
-        $stmtP = $db->prepare("INSERT INTO pagamenti (tesserato_id, quota_id, importo, data_pagamento, metodo_pagamento, causale, ricevuta_numero, note) VALUES (?, ?, ?, NOW(), ?, ?, ?, ?)");
-        $stmtP->execute([$tesseratoId, $quotaId, $importo, $metodo, $causale, $ricevutaNum, $note]);
-
-        // Se collegato a una quota, aggiorna importo_pagato e stato
-        if ($quotaId !== null) {
-            $stmtQ = $db->prepare("SELECT importo, importo_pagato FROM quote WHERE id = ? FOR UPDATE");
-            $stmtQ->execute([$quotaId]);
-            $quota = $stmtQ->fetch();
-
-            if ($quota) {
-                $nuovoPagato = (float)$quota['importo_pagato'] + $importo;
-                $nuovoStato = ($nuovoPagato >= (float)$quota['importo']) ? 'pagata' : 'parziale';
-
-                $stmtUpdate = $db->prepare("UPDATE quote SET importo_pagato = ?, stato = ? WHERE id = ?");
-                $stmtUpdate->execute([$nuovoPagato, $nuovoStato, $quotaId]);
-            }
-        }
-
-        $db->commit();
-        header('Location: index.php?page=pagamenti&msg=success');
-        exit;
-    } catch (Exception $e) {
-        $db->rollBack();
-        die("Errore salvataggio: " . $e->getMessage());
-    }
-}
-`
+    "path": "private/pages/persone.php",
+    "filename": "persone.php",
+    "folder": "private/pages",
+    "language": "php",
+    "description": "Anagrafica persone con gestione tutori legali minorenni",
+    "content": "<?php\n/**\n * Gestione Tabella Persone con Minorenni e Tutori\n * Posizione: /private/pages/persone.php\n */\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';\n\n$db = getDbConnection();\n$search = trim($_GET['search'] ?? '');\n$filterMinori = $_GET['minorenne'] ?? '';\n\n// Paginazione\n$pageNumber = max(1, (int)($_GET['p'] ?? 1));\n$perPage = 10;\n$offset = ($pageNumber - 1) * $perPage;\n\n$where = \"WHERE 1=1\";\n$params = [];\n\nif ($search !== '') {\n    $where .= \" AND (nome LIKE ? OR cognome LIKE ? OR codice_fiscale LIKE ?)\";\n    $params[] = \"%$search%\";\n    $params[] = \"%$search%\";\n    $params[] = \"%$search%\";\n}\n\nif ($filterMinori !== '') {\n    $where .= \" AND is_minorenne = ?\";\n    $params[] = (int)$filterMinori;\n}\n\n$stmtCount = $db->prepare(\"SELECT COUNT(*) FROM persone $where\");\n$stmtCount->execute($params);\n$totalRecords = $stmtCount->fetchColumn();\n$totalPages = ceil($totalRecords / $perPage);\n\n$stmt = $db->prepare(\"SELECT * FROM persone $where ORDER BY cognome, nome LIMIT $perPage OFFSET $offset\");\n$stmt->execute($params);\n$persone = $stmt->fetchAll();\n?>\n\n<div class=\"d-flex justify-content-between align-items-center mb-3\">\n    <div>\n        <h2 class=\"h3 fw-bold mb-0\"><i class=\"bi bi-people-fill me-2 text-primary\"></i>Anagrafica Generale Persone</h2>\n        <p class=\"text-muted small mb-0\">Gestione soci e atleti (con evidenza atleti minorenni e tutore legale)</p>\n    </div>\n    <button class=\"btn btn-primary\" data-bs-toggle=\"modal\" data-bs-target=\"#modalNuovaPersona\">\n        <i class=\"bi bi-person-plus-fill me-1\"></i> Nuova Persona\n    </button>\n</div>\n\n<!-- Filtri di ricerca -->\n<div class=\"card border-0 shadow-sm mb-3\">\n    <div class=\"card-body py-2\">\n        <form method=\"GET\" class=\"row g-2 align-items-center\">\n            <input type=\"hidden\" name=\"page\" value=\"persone\">\n            <div class=\"col-md-5\">\n                <input type=\"text\" name=\"search\" class=\"form-control form-control-sm\" placeholder=\"Cerca per Nome, Cognome o Codice Fiscale...\" value=\"<?= htmlspecialchars($search) ?>\">\n            </div>\n            <div class=\"col-md-3\">\n                <select name=\"minorenne\" class=\"form-select form-select-sm\">\n                    <option value=\"\">Tutti (Minorenni e Maggiorenni)</option>\n                    <option value=\"1\" <?= $filterMinori==='1'?'selected':'' ?>>Solo Minorenni (con Tutore)</option>\n                    <option value=\"0\" <?= $filterMinori==='0'?'selected':'' ?>>Solo Maggiorenni</option>\n                </select>\n            </div>\n            <div class=\"col-md-2\">\n                <button type=\"submit\" class=\"btn btn-sm btn-secondary w-100\"><i class=\"bi bi-filter me-1\"></i> Filtra</button>\n            </div>\n            <?php if ($search !== '' || $filterMinori !== ''): ?>\n            <div class=\"col-md-2\">\n                <a href=\"index.php?page=persone\" class=\"btn btn-sm btn-outline-danger w-100\">Resetta</a>\n            </div>\n            <?php endif; ?>\n        </form>\n    </div>\n</div>\n\n<!-- Tabella Paginata -->\n<div class=\"table-responsive bg-white rounded shadow-sm\">\n    <table class=\"table table-hover align-middle mb-0\">\n        <thead class=\"table-light\">\n            <tr>\n                <th>ID</th>\n                <th>Nominativo Atleta</th>\n                <th>Codice Fiscale</th>\n                <th>Nascita</th>\n                <th>Tipo Atleta</th>\n                <th>Tutore Legale (Minorenni)</th>\n                <th>Contatti</th>\n                <th class=\"text-end\">Azioni</th>\n            </tr>\n        </thead>\n        <tbody>\n            <?php if (empty($persone)): ?>\n                <tr><td colspan=\"8\" class=\"text-center py-4 text-muted\">Nessuna persona trovata con i filtri correnti.</td></tr>\n            <?php else: foreach ($persone as $p): ?>\n                <tr>\n                    <td><span class=\"badge bg-light text-dark\">#<?= $p['id'] ?></span></td>\n                    <td><strong><?= htmlspecialchars($p['cognome'] . ' ' . $p['nome']) ?></strong></td>\n                    <td><code><?= htmlspecialchars($p['codice_fiscale']) ?></code></td>\n                    <td><?= date('d/m/Y', strtotime($p['data_nascita'])) ?></td>\n                    <td>\n                        <?php if ($p['is_minorenne']): ?>\n                            <span class=\"badge bg-warning text-dark\"><i class=\"bi bi-shield-check me-1\"></i>Minorenne</span>\n                        <?php else: ?>\n                            <span class=\"badge bg-secondary\">Maggiorenne</span>\n                        <?php endif; ?>\n                    </td>\n                    <td>\n                        <?php if ($p['is_minorenne']): ?>\n                            <div><strong><?= htmlspecialchars($p['tutore_cognome'] . ' ' . $p['tutore_nome']) ?></strong> (<?= htmlspecialchars($p['tutore_relazione'] ?? 'Tutore') ?>)</div>\n                            <small class=\"text-muted\"><i class=\"bi bi-telephone\"></i> <?= htmlspecialchars($p['tutore_telefono'] ?? '-') ?></small>\n                        <?php else: ?>\n                            <span class=\"text-muted\">-</span>\n                        <?php endif; ?>\n                    </td>\n                    <td>\n                        <small>\n                            <div><i class=\"bi bi-telephone\"></i> <?= htmlspecialchars($p['telefono'] ?? '-') ?></div>\n                            <div><i class=\"bi bi-envelope\"></i> <?= htmlspecialchars($p['email'] ?? '-') ?></div>\n                        </small>\n                    </td>\n                    <td class=\"text-end\">\n                        <button class=\"btn btn-sm btn-outline-primary\"><i class=\"bi bi-pencil\"></i></button>\n                    </td>\n                </tr>\n            <?php endforeach; endif; ?>\n        </tbody>\n    </table>\n</div>\n<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>\n"
   },
   {
-    path: 'private/pages/persone.php',
-    filename: 'persone.php',
-    folder: 'private/pages',
-    language: 'php',
-    description: 'Anagrafica Persone con evidenza minorenni, tutore legale, ricerca e paginazione',
-    content: `<?php
-/**
- * Gestione Tabella Persone con Minorenni e Tutori
- * Posizione: /private/pages/persone.php
- */
-require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';
-
-$db = getDbConnection();
-$search = trim($_GET['search'] ?? '');
-$filterMinori = $_GET['minorenne'] ?? '';
-
-// Paginazione
-$pageNumber = max(1, (int)($_GET['p'] ?? 1));
-$perPage = 10;
-$offset = ($pageNumber - 1) * $perPage;
-
-$where = "WHERE 1=1";
-$params = [];
-
-if ($search !== '') {
-    $where .= " AND (nome LIKE ? OR cognome LIKE ? OR codice_fiscale LIKE ?)";
-    $params[] = "%$search%";
-    $params[] = "%$search%";
-    $params[] = "%$search%";
-}
-
-if ($filterMinori !== '') {
-    $where .= " AND is_minorenne = ?";
-    $params[] = (int)$filterMinori;
-}
-
-$stmtCount = $db->prepare("SELECT COUNT(*) FROM persone $where");
-$stmtCount->execute($params);
-$totalRecords = $stmtCount->fetchColumn();
-$totalPages = ceil($totalRecords / $perPage);
-
-$stmt = $db->prepare("SELECT * FROM persone $where ORDER BY cognome, nome LIMIT $perPage OFFSET $offset");
-$stmt->execute($params);
-$persone = $stmt->fetchAll();
-?>
-
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h2 class="h3 fw-bold mb-0"><i class="bi bi-people-fill me-2 text-primary"></i>Anagrafica Generale Persone</h2>
-        <p class="text-muted small mb-0">Gestione soci e atleti (con evidenza atleti minorenni e tutore legale)</p>
-    </div>
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuovaPersona">
-        <i class="bi bi-person-plus-fill me-1"></i> Nuova Persona
-    </button>
-</div>
-
-<!-- Filtri di ricerca -->
-<div class="card border-0 shadow-sm mb-3">
-    <div class="card-body py-2">
-        <form method="GET" class="row g-2 align-items-center">
-            <input type="hidden" name="page" value="persone">
-            <div class="col-md-5">
-                <input type="text" name="search" class="form-control form-control-sm" placeholder="Cerca per Nome, Cognome o Codice Fiscale..." value="<?= htmlspecialchars($search) ?>">
-            </div>
-            <div class="col-md-3">
-                <select name="minorenne" class="form-select form-select-sm">
-                    <option value="">Tutti (Minorenni e Maggiorenni)</option>
-                    <option value="1" <?= $filterMinori==='1'?'selected':'' ?>>Solo Minorenni (con Tutore)</option>
-                    <option value="0" <?= $filterMinori==='0'?'selected':'' ?>>Solo Maggiorenni</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-sm btn-secondary w-100"><i class="bi bi-filter me-1"></i> Filtra</button>
-            </div>
-            <?php if ($search !== '' || $filterMinori !== ''): ?>
-            <div class="col-md-2">
-                <a href="index.php?page=persone" class="btn btn-sm btn-outline-danger w-100">Resetta</a>
-            </div>
-            <?php endif; ?>
-        </form>
-    </div>
-</div>
-
-<!-- Tabella Paginata -->
-<div class="table-responsive bg-white rounded shadow-sm">
-    <table class="table table-hover align-middle mb-0">
-        <thead class="table-light">
-            <tr>
-                <th>ID</th>
-                <th>Nominativo Atleta</th>
-                <th>Codice Fiscale</th>
-                <th>Nascita</th>
-                <th>Tipo Atleta</th>
-                <th>Tutore Legale (Minorenni)</th>
-                <th>Contatti</th>
-                <th class="text-end">Azioni</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php if (empty($persone)): ?>
-                <tr><td colspan="8" class="text-center py-4 text-muted">Nessuna persona trovata con i filtri correnti.</td></tr>
-            <?php else: foreach ($persone as $p): ?>
-                <tr>
-                    <td><span class="badge bg-light text-dark">#<?= $p['id'] ?></span></td>
-                    <td><strong><?= htmlspecialchars($p['cognome'] . ' ' . $p['nome']) ?></strong></td>
-                    <td><code><?= htmlspecialchars($p['codice_fiscale']) ?></code></td>
-                    <td><?= date('d/m/Y', strtotime($p['data_nascita'])) ?></td>
-                    <td>
-                        <?php if ($p['is_minorenne']): ?>
-                            <span class="badge bg-warning text-dark"><i class="bi bi-shield-check me-1"></i>Minorenne</span>
-                        <?php else: ?>
-                            <span class="badge bg-secondary">Maggiorenne</span>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <?php if ($p['is_minorenne']): ?>
-                            <div><strong><?= htmlspecialchars($p['tutore_cognome'] . ' ' . $p['tutore_nome']) ?></strong> (<?= htmlspecialchars($p['tutore_relazione'] ?? 'Tutore') ?>)</div>
-                            <small class="text-muted"><i class="bi bi-telephone"></i> <?= htmlspecialchars($p['tutore_telefono'] ?? '-') ?></small>
-                        <?php else: ?>
-                            <span class="text-muted">-</span>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <small>
-                            <div><i class="bi bi-telephone"></i> <?= htmlspecialchars($p['telefono'] ?? '-') ?></div>
-                            <div><i class="bi bi-envelope"></i> <?= htmlspecialchars($p['email'] ?? '-') ?></div>
-                        </small>
-                    </td>
-                    <td class="text-end">
-                        <button class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></button>
-                    </td>
-                </tr>
-            <?php endforeach; endif; ?>
-        </tbody>
-    </table>
-</div>
-<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>
-`
+    "path": "private/pages/tesserati.php",
+    "filename": "tesserati.php",
+    "folder": "private/pages",
+    "language": "php",
+    "description": "Registro tesserati con certificati medici e nuovo tesseramento",
+    "content": "<?php\n/**\n * Gestione Tesserati per Anno Sportivo\n * Posizione: /private/pages/tesserati.php\n */\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';\n$db = getDbConnection();\n\n$search = trim($_GET['search'] ?? '');\n$tipo = $_GET['tipo'] ?? '';\n$stato = $_GET['stato'] ?? '';\n\n$sql = \"SELECT t.*, p.nome, p.cognome, p.codice_fiscale, p.is_minorenne, p.tutore_nome, p.tutore_cognome, a.anno\n        FROM tesserati t\n        INNER JOIN persone p ON t.persona_id = p.id\n        INNER JOIN anno a ON t.anno_id = a.id\n        WHERE 1=1\";\n$params = [];\n\nif ($search !== '') {\n    $sql .= \" AND (p.nome LIKE ? OR p.cognome LIKE ? OR t.numero_tessera LIKE ? OR p.codice_fiscale LIKE ?)\";\n    $params[] = \"%$search%\";\n    $params[] = \"%$search%\";\n    $params[] = \"%$search%\";\n    $params[] = \"%$search%\";\n}\n\nif ($tipo !== '') {\n    $sql .= \" AND t.tipo_tesseramento = ?\";\n    $params[] = $tipo;\n}\n\nif ($stato !== '') {\n    $sql .= \" AND t.stato = ?\";\n    $params[] = $stato;\n}\n\n$sql .= \" ORDER BY t.data_tesseramento DESC\";\n$stmt = $db->prepare($sql);\n$stmt->execute($params);\n$tesserati = $stmt->fetchAll();\n\n// Recupera elenco persone e anni per il modal di nuovo tesseramento\n$elencoPersone = $db->query(\"SELECT id, nome, cognome, codice_fiscale, is_minorenne FROM persone ORDER BY cognome ASC, nome ASC\")->fetchAll();\n$elencoAnni = $db->query(\"SELECT id, anno, attivo FROM anno ORDER BY id DESC\")->fetchAll();\n?>\n\n<div class=\"d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2\">\n    <div>\n        <h2 class=\"h3 fw-bold mb-0\"><i class=\"bi bi-card-checklist me-2 text-primary\"></i>Registro Tesserati Sportivi</h2>\n        <p class=\"text-muted small mb-0\">Gestione soci tesserati, numeri di tessera e certificati medici</p>\n    </div>\n    <button class=\"btn btn-primary fw-bold shadow-sm\" data-bs-toggle=\"modal\" data-bs-target=\"#modalNuovoTesseramento\">\n        <i class=\"bi bi-plus-lg me-1\"></i> Nuovo Tesseramento\n    </button>\n</div>\n\n<!-- Filtri -->\n<div class=\"card border-0 shadow-sm mb-3\">\n    <div class=\"card-body py-2\">\n        <form method=\"GET\" class=\"row g-2 align-items-center\">\n            <input type=\"hidden\" name=\"page\" value=\"tesserati\">\n            <div class=\"col-md-5\">\n                <input type=\"text\" name=\"search\" class=\"form-control form-control-sm\" placeholder=\"Cerca Atleta, Tessera o Codice Fiscale...\" value=\"<?= htmlspecialchars($search) ?>\">\n            </div>\n            <div class=\"col-md-3\">\n                <select name=\"tipo\" class=\"form-select form-select-sm\">\n                    <option value=\"\">Tutti i Tipi Tesseramento</option>\n                    <option value=\"Agonista\" <?= $tipo==='Agonista'?'selected':'' ?>>Agonista</option>\n                    <option value=\"Non Agonista\" <?= $tipo==='Non Agonista'?'selected':'' ?>>Non Agonista</option>\n                    <option value=\"Promozionale\" <?= $tipo==='Promozionale'?'selected':'' ?>>Promozionale</option>\n                    <option value=\"Socio / Dirigente\" <?= $tipo==='Socio / Dirigente'?'selected':'' ?>>Socio / Dirigente</option>\n                </select>\n            </div>\n            <div class=\"col-md-2\">\n                <select name=\"stato\" class=\"form-select form-select-sm\">\n                    <option value=\"\">Tutti gli Stati</option>\n                    <option value=\"Attivo\" <?= $stato==='Attivo'?'selected':'' ?>>Attivo</option>\n                    <option value=\"Sospeso\" <?= $stato==='Sospeso'?'selected':'' ?>>Sospeso</option>\n                    <option value=\"Scaduto\" <?= $stato==='Scaduto'?'selected':'' ?>>Scaduto</option>\n                </select>\n            </div>\n            <div class=\"col-md-2\">\n                <button type=\"submit\" class=\"btn btn-sm btn-secondary w-100\"><i class=\"bi bi-filter me-1\"></i> Filtra</button>\n            </div>\n        </form>\n    </div>\n</div>\n\n<div class=\"table-responsive bg-white rounded shadow-sm\">\n    <table class=\"table table-hover align-middle mb-0\">\n        <thead class=\"table-light\">\n            <tr>\n                <th>N° Tessera</th>\n                <th>Atleta</th>\n                <th>Anno</th>\n                <th>Data Tesseramento</th>\n                <th>Tipo</th>\n                <th>Certificato Medico</th>\n                <th>Stato</th>\n            </tr>\n        </thead>\n        <tbody>\n            <?php if (empty($tesserati)): ?>\n                <tr><td colspan=\"7\" class=\"text-center py-4 text-muted\">Nessun tesserato trovato.</td></tr>\n            <?php else: foreach ($tesserati as $t): ?>\n                <tr>\n                    <td><code><?= htmlspecialchars($t['numero_tessera']) ?></code></td>\n                    <td>\n                        <strong><?= htmlspecialchars($t['cognome'] . ' ' . $t['nome']) ?></strong>\n                        <?php if ($t['is_minorenne']): ?>\n                            <span class=\"badge bg-warning text-dark ms-1\">Minorenne</span>\n                        <?php endif; ?>\n                    </td>\n                    <td><span class=\"badge bg-light text-dark\"><?= htmlspecialchars($t['anno']) ?></span></td>\n                    <td><?= date('d/m/Y', strtotime($t['data_tesseramento'])) ?></td>\n                    <td><span class=\"badge bg-primary-subtle text-primary\"><?= htmlspecialchars($t['tipo_tesseramento']) ?></span></td>\n                    <td>\n                        <?php if (!empty($t['certificato_medico_scadenza'])): \n                            $isScadutoMed = strtotime($t['certificato_medico_scadenza']) < time();\n                        ?>\n                            <span class=\"<?= $isScadutoMed ? 'text-danger fw-bold' : 'text-success' ?>\">\n                                <?= date('d/m/Y', strtotime($t['certificato_medico_scadenza'])) ?>\n                                <?= $isScadutoMed ? '<i class=\"bi bi-exclamation-circle ms-1\"></i>' : '' ?>\n                            </span>\n                        <?php else: ?>\n                            <span class=\"text-muted\">Non inserito</span>\n                        <?php endif; ?>\n                    </td>\n                    <td>\n                        <span class=\"badge bg-<?= $t['stato']==='Attivo'?'success':($t['stato']==='Sospeso'?'warning text-dark':'secondary') ?>\">\n                            <?= htmlspecialchars($t['stato']) ?>\n                        </span>\n                    </td>\n                </tr>\n            <?php endforeach; endif; ?>\n        </tbody>\n    </table>\n</div>\n\n<!-- MODAL: NUOVO TESSERAMENTO -->\n<div class=\"modal fade\" id=\"modalNuovoTesseramento\" tabindex=\"-1\" aria-hidden=\"true\">\n    <div class=\"modal-dialog modal-dialog-centered modal-lg\">\n        <div class=\"modal-content border-0 rounded-4 shadow\">\n            <div class=\"modal-header bg-primary text-white\">\n                <h5 class=\"modal-title fw-bold\"><i class=\"bi bi-card-checklist me-2\"></i>Registra Nuovo Tesseramento</h5>\n                <button type=\"button\" class=\"btn-close btn-close-white\" data-bs-dismiss=\"modal\"></button>\n            </div>\n            <form method=\"POST\" action=\"index.php?action=salva_tesseramento\">\n                <div class=\"modal-body p-4\">\n                    <div class=\"row g-3\">\n                        <div class=\"col-md-8\">\n                            <label class=\"form-label fw-bold\">Seleziona Persona / Atleta <span class=\"text-danger\">*</span></label>\n                            <select name=\"persona_id\" class=\"form-select\" required>\n                                <option value=\"\">-- Seleziona persona da anagrafica --</option>\n                                <?php foreach ($elencoPersone as $p): ?>\n                                    <option value=\"<?= $p['id'] ?>\">\n                                        <?= htmlspecialchars($p['cognome'] . ' ' . $p['nome']) ?> (CF: <?= htmlspecialchars($p['codice_fiscale']) ?><?= $p['is_minorenne'] ? ' - Minorenne' : '' ?>)\n                                    </option>\n                                <?php endforeach; ?>\n                            </select>\n                            <div class=\"form-text\">Se la persona non è presente, inseriscila prima in <a href=\"index.php?page=persone\">Persone & Tutori</a>.</div>\n                        </div>\n                        <div class=\"col-md-4\">\n                            <label class=\"form-label fw-bold\">Anno Sportivo <span class=\"text-danger\">*</span></label>\n                            <select name=\"anno_id\" class=\"form-select\" required>\n                                <?php foreach ($elencoAnni as $a): ?>\n                                    <option value=\"<?= $a['id'] ?>\" <?= (!empty($a['attivo']) ? 'selected' : '') ?>><?= htmlspecialchars($a['anno']) ?></option>\n                                <?php endforeach; ?>\n                            </select>\n                        </div>\n\n                        <div class=\"col-md-6\">\n                            <label class=\"form-label fw-bold\">Numero di Tessera <span class=\"text-danger\">*</span></label>\n                            <input type=\"text\" name=\"numero_tessera\" class=\"form-control font-monospace\" placeholder=\"es. FISR-2024-0892\" required>\n                        </div>\n                        <div class=\"col-md-6\">\n                            <label class=\"form-label fw-bold\">Data Tesseramento <span class=\"text-danger\">*</span></label>\n                            <input type=\"date\" name=\"data_tesseramento\" class=\"form-control\" value=\"<?= date('Y-m-d') ?>\" required>\n                        </div>\n\n                        <div class=\"col-md-6\">\n                            <label class=\"form-label fw-bold\">Tipo Tesseramento <span class=\"text-danger\">*</span></label>\n                            <select name=\"tipo_tesseramento\" class=\"form-select\" required>\n                                <option value=\"Agonista\">Agonista</option>\n                                <option value=\"Non Agonista\">Non Agonista</option>\n                                <option value=\"Promozionale\">Promozionale</option>\n                                <option value=\"Socio / Dirigente\">Socio / Dirigente</option>\n                            </select>\n                        </div>\n                        <div class=\"col-md-6\">\n                            <label class=\"form-label fw-bold\">Scadenza Certificato Medico</label>\n                            <input type=\"date\" name=\"certificato_medico_scadenza\" class=\"form-control\">\n                        </div>\n\n                        <div class=\"col-md-6\">\n                            <label class=\"form-label fw-bold\">Stato Tesseramento</label>\n                            <select name=\"stato\" class=\"form-select\">\n                                <option value=\"Attivo\">Attivo</option>\n                                <option value=\"Sospeso\">Sospeso</option>\n                                <option value=\"Scaduto\">Scaduto</option>\n                            </select>\n                        </div>\n                    </div>\n                </div>\n                <div class=\"modal-footer bg-light\">\n                    <button type=\"button\" class=\"btn btn-secondary\" data-bs-dismiss=\"modal\">Annulla</button>\n                    <button type=\"submit\" class=\"btn btn-primary fw-bold\"><i class=\"bi bi-check-lg me-1\"></i> Conferma Tesseramento</button>\n                </div>\n            </form>\n        </div>\n    </div>\n</div>\n\n<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>\n"
   },
   {
-    path: 'private/pages/quote_scadute.php',
-    filename: 'quote_scadute.php',
-    folder: 'private/pages',
-    language: 'php',
-    description: 'Vista e tabella dedicata a quote scadute non pagate con calcolo giorni di ritardo e alert',
-    content: `<?php
-/**
- * Tabella Quote Scadute Non Pagate
- * Posizione: /private/pages/quote_scadute.php
- */
-require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';
-$db = getDbConnection();
-
-// Seleziona tutte le quote con scadenza superata e stato non 'pagata'
-$sql = "SELECT q.*, t.numero_tessera, p.nome, p.cognome, p.is_minorenne, p.tutore_nome, p.tutore_cognome, p.tutore_telefono,
-               g.nome_gruppo, DATEDIFF(CURRENT_DATE, q.data_scadenza) AS giorni_ritardo
-        FROM quote q
-        INNER JOIN tesserati t ON q.tesserato_id = t.id
-        INNER JOIN persone p ON t.persona_id = p.id
-        LEFT JOIN gruppi g ON q.gruppo_id = g.id
-        WHERE q.data_scadenza < CURRENT_DATE 
-          AND q.stato IN ('da_pagare', 'parziale')
-        ORDER BY q.data_scadenza ASC";
-
-$stmt = $db->query($sql);
-$quoteScadute = $stmt->fetchAll();
-?>
-
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h2 class="h3 fw-bold text-danger mb-0"><i class="bi bi-exclamation-triangle-fill me-2"></i>Quote Scadute Non Pagate</h2>
-        <p class="text-muted small mb-0">Elenco immediato dei crediti scaduti da sollecitare o incassare</p>
-    </div>
-    <a href="index.php?page=quote" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i> Torna a Tutte le Quote</a>
-</div>
-
-<div class="table-responsive bg-white rounded shadow-sm">
-    <table class="table table-hover align-middle mb-0">
-        <thead class="table-danger text-danger-emphasis">
-            <tr>
-                <th>Scadenza</th>
-                <th>Giorni Ritardo</th>
-                <th>Atleta</th>
-                <th>Gruppo</th>
-                <th>Causale</th>
-                <th>Da Pagare</th>
-                <th>Referente / Tutore</th>
-                <th class="text-end">Azione</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php if (empty($quoteScadute)): ?>
-                <tr><td colspan="8" class="text-center py-4 text-success"><i class="bi bi-check-circle-fill me-1"></i> Ottimo! Nessuna quota scaduta in sospeso.</td></tr>
-            <?php else: foreach ($quoteScadute as $q): 
-                $saldo = $q['importo'] - $q['importo_pagato'];
-            ?>
-                <tr>
-                    <td><strong class="text-danger"><?= date('d/m/Y', strtotime($q['data_scadenza'])) ?></strong></td>
-                    <td><span class="badge bg-danger"><?= $q['giorni_ritardo'] ?> giorni fa</span></td>
-                    <td><strong><?= htmlspecialchars($q['cognome'] . ' ' . $q['nome']) ?></strong> (<?= htmlspecialchars($q['numero_tessera']) ?>)</td>
-                    <td><?= htmlspecialchars($q['nome_gruppo'] ?? 'Generale') ?></td>
-                    <td><?= htmlspecialchars($q['causale']) ?></td>
-                    <td><span class="text-danger fw-bold fs-6">€ <?= number_format($saldo, 2, ',', '.') ?></span></td>
-                    <td>
-                        <?php if ($q['is_minorenne']): ?>
-                            <small>
-                                <div><i class="bi bi-shield me-1"></i><strong><?= htmlspecialchars($q['tutore_cognome'] . ' ' . $q['tutore_nome']) ?></strong></div>
-                                <div><i class="bi bi-telephone me-1"></i><a href="tel:<?= $q['tutore_telefono'] ?>"><?= $q['tutore_telefono'] ?></a></div>
-                            </small>
-                        <?php else: ?>
-                            <span class="text-muted">Atleta Maggiorenne</span>
-                        <?php endif; ?>
-                    </td>
-                    <td class="text-end">
-                        <a href="index.php?page=pagamenti&paga_quota=<?= $q['id'] ?>" class="btn btn-sm btn-success fw-bold">
-                            <i class="bi bi-cash me-1"></i> Salda Ora
-                        </a>
-                    </td>
-                </tr>
-            <?php endforeach; endif; ?>
-        </tbody>
-    </table>
-</div>
-<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>
-`
+    "path": "private/pages/gruppi.php",
+    "filename": "gruppi.php",
+    "folder": "private/pages",
+    "language": "php",
+    "description": "Gestione corsi sportivi annuali con schede, iscritti e calcolo quote automatiche",
+    "content": "<?php\n/**\n * Gestione Gruppi & Corsi Sportivi Annuali\n * Posizione: /private/pages/gruppi.php\n */\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';\n$db = getDbConnection();\n\n// Recupera anni sportivi e anno attivo\n$anni = $db->query(\"SELECT * FROM anno ORDER BY id DESC\")->fetchAll();\n$annoAttivoId = $annoAttivo['id'] ?? ($anni[0]['id'] ?? 1);\n\n// Recupera gruppi con conteggio iscritti e quote generate\n$stmt = $db->prepare(\"\n    SELECT g.*, a.anno,\n           (SELECT COUNT(*) FROM gruppi_tesserati gt WHERE gt.gruppo_id = g.id) AS num_iscritti,\n           (SELECT COUNT(*) FROM quote q WHERE q.gruppo_id = g.id AND q.stato != 'annullata') AS num_quote\n    FROM gruppi g\n    INNER JOIN anno a ON g.anno_id = a.id\n    ORDER BY g.id DESC\n\");\n$stmt->execute();\n$gruppi = $stmt->fetchAll();\n\n// Recupera tutti i tesserati dell'anno per l'iscrizione rapida\n$stmtT = $db->prepare(\"\n    SELECT t.id AS tesserato_id, t.numero_tessera, p.nome, p.cognome, p.is_minorenne\n    FROM tesserati t\n    INNER JOIN persone p ON t.persona_id = p.id\n    WHERE t.stato = 'Attivo'\n    ORDER BY p.cognome ASC, p.nome ASC\n\");\n$stmtT->execute();\n$tesseratiAttivi = $stmtT->fetchAll();\n\n// Recupera tutti gli iscritti con dettagli persona per ciascun gruppo\n$stmtIscritti = $db->query(\"\n    SELECT gt.id AS iscrizione_id, gt.gruppo_id, gt.data_iscrizione, gt.note,\n           t.id AS tesserato_id, t.numero_tessera,\n           p.nome, p.cognome, p.is_minorenne, p.tutore_nome, p.tutore_cognome, p.tutore_telefono\n    FROM gruppi_tesserati gt\n    INNER JOIN tesserati t ON gt.tesserato_id = t.id\n    INNER JOIN persone p ON t.persona_id = p.id\n    ORDER BY p.cognome ASC, p.nome ASC\n\");\n$tuttiIscritti = $stmtIscritti->fetchAll();\n$iscrittiPerGruppo = [];\nforeach ($tuttiIscritti as $isc) {\n    $iscrittiPerGruppo[$isc['gruppo_id']][] = $isc;\n}\n?>\n\n<div class=\"d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2\">\n    <div>\n        <h2 class=\"h3 fw-bold mb-1 d-flex align-items-center\">\n            <i class=\"bi bi-diagram-3 text-primary me-2\"></i> Gestione Gruppi & Corsi Annuali\n        </h2>\n        <p class=\"text-muted small mb-0\">\n            Configurazione corsi sportivi e generazione quote automatiche mensili per il periodo di attività\n        </p>\n    </div>\n    <div class=\"d-flex gap-2\">\n        <button class=\"btn btn-outline-primary\" data-bs-toggle=\"modal\" data-bs-target=\"#modalIscriviGruppo\">\n            <i class=\"bi bi-person-plus me-1\"></i> Iscrivi Atleta a Gruppo\n        </button>\n        <button class=\"btn btn-primary fw-bold shadow-sm\" data-bs-toggle=\"modal\" data-bs-target=\"#modalNuovoGruppo\">\n            <i class=\"bi bi-plus-lg me-1\"></i> Crea Nuovo Gruppo\n        </button>\n    </div>\n</div>\n\n<!-- Banner Informativo Automatismo Quote -->\n<div class=\"alert alert-info border-info d-flex align-items-center mb-4 shadow-sm p-3 rounded-3\">\n    <i class=\"bi bi-gear-wide-connected fs-2 me-3 text-primary flex-shrink-0\"></i>\n    <div class=\"small\">\n        <strong>Automatismo Quote Mensili:</strong> Ogni gruppo ha una data di inizio, una data di fine e una quota mensile.\n        Quando un atleta viene iscritto al gruppo (o quando clicchi su <em>\"Genera Quote\"</em>), il sistema calcola e inserisce automaticamente tutte le rate mensili dal mese di inizio al mese di fine, con scadenza al giorno mensile indicato.\n    </div>\n</div>\n\n<!-- Griglia Schede Gruppi -->\n<?php if (empty($gruppi)): ?>\n    <div class=\"card border-0 shadow-sm rounded-4 p-5 text-center text-muted\">\n        <i class=\"bi bi-diagram-3 fs-1 mb-3 text-secondary\"></i>\n        <h5>Nessun gruppo o corso configurato</h5>\n        <p class=\"small mb-3\">Crea il tuo primo gruppo sportivo per organizzare atleti, rate mensili e istruttori.</p>\n        <div>\n            <button class=\"btn btn-primary\" data-bs-toggle=\"modal\" data-bs-target=\"#modalNuovoGruppo\">\n                <i class=\"bi bi-plus-lg me-1\"></i> Crea Nuovo Gruppo\n            </button>\n        </div>\n    </div>\n<?php else: ?>\n    <div class=\"row g-4 mb-4\">\n        <?php foreach ($gruppi as $g): ?>\n            <?php \n                $iscrittiGruppo = $iscrittiPerGruppo[$g['id']] ?? [];\n                $numIscritti = count($iscrittiGruppo);\n            ?>\n            <div class=\"col-12 col-md-6 col-xl-4\">\n                <div class=\"card border-0 shadow-sm rounded-4 h-100 bg-white d-flex flex-column\">\n                    <div class=\"card-header bg-white border-0 pt-4 px-4 pb-0 d-flex justify-content-between align-items-start\">\n                        <div>\n                            <span class=\"badge bg-primary-subtle text-primary mb-2 px-2 py-1\">\n                                <?= htmlspecialchars($g['categoria'] ?: 'Corso Sportivo') ?>\n                            </span>\n                            <h5 class=\"fw-bold text-dark mb-1\"><?= htmlspecialchars($g['nome_gruppo']) ?></h5>\n                        </div>\n                        <div class=\"text-end\">\n                            <span class=\"badge bg-success-subtle text-success fs-6 fw-bold\">\n                                € <?= number_format($g['quota_mensile'], 2, ',', '.') ?> / mese\n                            </span>\n                        </div>\n                    </div>\n\n                    <div class=\"card-body px-4 py-3 flex-grow-1\">\n                        <p class=\"text-muted small mb-3\"><?= htmlspecialchars($g['descrizione'] ?: 'Nessuna descrizione specificata.') ?></p>\n\n                        <div class=\"bg-light p-3 rounded-3 small mb-3\">\n                            <div class=\"row g-2\">\n                                <div class=\"col-6\">\n                                    <span class=\"text-muted d-block\">Periodo Corso:</span>\n                                    <strong><?= date('d/m/Y', strtotime($g['data_inizio'])) ?> &bull; <?= date('d/m/Y', strtotime($g['data_fine'])) ?></strong>\n                                </div>\n                                <div class=\"col-6\">\n                                    <span class=\"text-muted d-block\">Giorno Scadenza:</span>\n                                    <strong>Ogni <?= (int)$g['giorno_scadenza_mensile'] ?> del mese</strong>\n                                </div>\n                                <div class=\"col-12\">\n                                    <span class=\"text-muted d-block\">Istruttore Responsabile:</span>\n                                    <strong class=\"text-primary\"><?= htmlspecialchars($g['istruttore'] ?: 'Non assegnato') ?></strong>\n                                </div>\n                            </div>\n                        </div>\n\n                        <div class=\"d-flex justify-content-between align-items-center small text-muted\">\n                            <span>\n                                <i class=\"bi bi-people-fill me-1 text-secondary\"></i>\n                                <strong><?= $numIscritti ?></strong> atleti iscritti\n                            </span>\n                            <span>\n                                <i class=\"bi bi-receipt me-1 text-secondary\"></i>\n                                <strong><?= (int)$g['num_quote'] ?></strong> quote attive\n                            </span>\n                        </div>\n                    </div>\n\n                    <div class=\"card-footer bg-white border-top p-3 d-flex flex-wrap gap-2\">\n                        <button\n                            type=\"button\"\n                            class=\"btn btn-outline-secondary btn-sm flex-fill\"\n                            data-bs-toggle=\"modal\"\n                            data-bs-target=\"#modalIscritti_<?= $g['id'] ?>\"\n                        >\n                            <i class=\"bi bi-list-ul me-1\"></i> Elenco Iscritti (<?= $numIscritti ?>)\n                        </button>\n\n                        <a\n                            href=\"index.php?action=genera_quote&gruppo_id=<?= $g['id'] ?>&redirect=gruppi\"\n                            class=\"btn btn-outline-primary btn-sm flex-fill fw-bold\"\n                            title=\"Calcola e inserisce automaticamente le quote mensili per tutti gli iscritti\"\n                            onclick=\"return confirm('Generare/sincronizzare tutte le rate mensili per gli iscritti di questo gruppo?');\"\n                        >\n                            <i class=\"bi bi-lightning-charge me-1\"></i> Genera Quote\n                        </a>\n\n                        <form method=\"POST\" action=\"index.php?action=elimina_gruppo\" class=\"d-inline\" onsubmit=\"return confirm('Sei sicuro di voler eliminare il gruppo <?= htmlspecialchars(addslashes($g['nome_gruppo'])) ?>? Verranno rimosse le iscrizioni associate.');\">\n                            <input type=\"hidden\" name=\"id\" value=\"<?= $g['id'] ?>\">\n                            <button type=\"submit\" class=\"btn btn-outline-danger btn-sm px-2\" title=\"Elimina Gruppo\">\n                                <i class=\"bi bi-trash\"></i>\n                            </button>\n                        </form>\n                    </div>\n                </div>\n            </div>\n\n            <!-- Modal Elenco Iscritti Gruppo -->\n            <div class=\"modal fade\" id=\"modalIscritti_<?= $g['id'] ?>\" tabindex=\"-1\" aria-hidden=\"true\">\n                <div class=\"modal-dialog modal-dialog-centered modal-lg\">\n                    <div class=\"modal-content border-0 rounded-4 shadow\">\n                        <div class=\"modal-header bg-light\">\n                            <h5 class=\"modal-title fw-bold\">\n                                <i class=\"bi bi-people-fill me-2 text-primary\"></i>\n                                Atleti Iscritti a: <?= htmlspecialchars($g['nome_gruppo']) ?>\n                            </h5>\n                            <button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"modal\"></button>\n                        </div>\n                        <div class=\"modal-body p-4\">\n                            <?php if (empty($iscrittiGruppo)): ?>\n                                <div class=\"text-center py-4 text-muted\">\n                                    <i class=\"bi bi-person-x fs-1 d-block mb-2 text-secondary\"></i>\n                                    Nessun atleta attualmente iscritto a questo gruppo.\n                                </div>\n                            <?php else: ?>\n                                <div class=\"table-responsive\">\n                                    <table class=\"table table-hover align-middle mb-0\">\n                                        <thead class=\"table-light small text-uppercase\">\n                                            <tr>\n                                                <th>Tessera</th>\n                                                <th>Nominativo</th>\n                                                <th>Data Iscrizione</th>\n                                                <th>Stato / Tutore</th>\n                                                <th class=\"text-end\">Azioni</th>\n                                            </tr>\n                                        </thead>\n                                        <tbody>\n                                            <?php foreach ($iscrittiGruppo as $isc): ?>\n                                                <tr>\n                                                    <td><code><?= htmlspecialchars($isc['numero_tessera']) ?></code></td>\n                                                    <td><strong><?= htmlspecialchars($isc['cognome'] . ' ' . $isc['nome']) ?></strong></td>\n                                                    <td><?= date('d/m/Y', strtotime($isc['data_iscrizione'])) ?></td>\n                                                    <td>\n                                                        <?php if ($isc['is_minorenne']): ?>\n                                                            <span class=\"badge bg-warning text-dark\">\n                                                                Minorenne (Tutore: <?= htmlspecialchars($isc['tutore_cognome'] . ' ' . $isc['tutore_nome'] . ($isc['tutore_telefono'] ? ' - ' . $isc['tutore_telefono'] : '')) ?>)\n                                                            </span>\n                                                        <?php else: ?>\n                                                            <span class=\"badge bg-secondary\">Maggiorenne</span>\n                                                        <?php endif; ?>\n                                                    </td>\n                                                    <td class=\"text-end\">\n                                                        <form method=\"POST\" action=\"index.php?action=disiscrivi_gruppo\" class=\"d-inline\" onsubmit=\"return confirm('Disiscrivere questo atleta dal gruppo?');\">\n                                                            <input type=\"hidden\" name=\"gruppo_id\" value=\"<?= $g['id'] ?>\">\n                                                            <input type=\"hidden\" name=\"tesserato_id\" value=\"<?= $isc['tesserato_id'] ?>\">\n                                                            <input type=\"hidden\" name=\"annulla_quote_future\" value=\"1\">\n                                                            <button type=\"submit\" class=\"btn btn-sm btn-outline-danger\" title=\"Disiscrivi atleta dal corso e annulla quote non saldate future\">\n                                                                <i class=\"bi bi-person-x me-1\"></i> Disiscrivi\n                                                            </button>\n                                                        </form>\n                                                    </td>\n                                                </tr>\n                                            <?php endforeach; ?>\n                                        </tbody>\n                                    </table>\n                                </div>\n                            <?php endif; ?>\n                        </div>\n                        <div class=\"modal-footer bg-light\">\n                            <button type=\"button\" class=\"btn btn-secondary\" data-bs-dismiss=\"modal\">Chiudi</button>\n                        </div>\n                    </div>\n                </div>\n            </div>\n        <?php endforeach; ?>\n    </div>\n<?php endif; ?>\n\n<!-- MODAL: CREA NUOVO GRUPPO -->\n<div class=\"modal fade\" id=\"modalNuovoGruppo\" tabindex=\"-1\" aria-hidden=\"true\">\n    <div class=\"modal-dialog modal-dialog-centered modal-lg\">\n        <div class=\"modal-content border-0 rounded-4 shadow\">\n            <div class=\"modal-header bg-primary text-white\">\n                <h5 class=\"modal-title fw-bold\">\n                    <i class=\"bi bi-plus-circle me-2\"></i> Crea Nuovo Gruppo o Corso Sportivo\n                </h5>\n                <button type=\"button\" class=\"btn-close btn-close-white\" data-bs-dismiss=\"modal\"></button>\n            </div>\n            <form method=\"POST\" action=\"index.php?action=salva_gruppo\">\n                <div class=\"modal-body p-4\">\n                    <div class=\"row g-3\">\n                        <div class=\"col-md-8\">\n                            <label class=\"form-label fw-bold\">Nome Gruppo / Corso <span class=\"text-danger\">*</span></label>\n                            <input type=\"text\" name=\"nome_gruppo\" class=\"form-control\" placeholder=\"es. Basket Under 14 Maschile, Pattinaggio Base\" required>\n                        </div>\n                        <div class=\"col-md-4\">\n                            <label class=\"form-label fw-bold\">Anno Sportivo <span class=\"text-danger\">*</span></label>\n                            <select name=\"anno_id\" class=\"form-select\" required>\n                                <?php foreach ($anni as $a): ?>\n                                    <option value=\"<?= $a['id'] ?>\" <?= (!empty($a['attivo']) ? 'selected' : '') ?>><?= htmlspecialchars($a['anno']) ?></option>\n                                <?php endforeach; ?>\n                            </select>\n                        </div>\n\n                        <div class=\"col-md-6\">\n                            <label class=\"form-label fw-bold\">Categoria Disciplina</label>\n                            <input type=\"text\" name=\"categoria\" class=\"form-control\" placeholder=\"es. Giovanile, Avviamento, Agonistica\">\n                        </div>\n                        <div class=\"col-md-6\">\n                            <label class=\"form-label fw-bold\">Istruttore / Allenatore Responsabile</label>\n                            <input type=\"text\" name=\"istruttore\" class=\"form-control\" placeholder=\"es. Coach Marco Rossi\">\n                        </div>\n\n                        <div class=\"col-md-6\">\n                            <label class=\"form-label fw-bold\">Quota Mensile Richiesta (€) <span class=\"text-danger\">*</span></label>\n                            <div class=\"input-group\">\n                                <span class=\"input-group-text\">€</span>\n                                <input type=\"number\" step=\"0.50\" name=\"quota_mensile\" class=\"form-control\" value=\"60.00\" required>\n                                <span class=\"input-group-text\">/ mese</span>\n                            </div>\n                        </div>\n                        <div class=\"col-md-6\">\n                            <label class=\"form-label fw-bold\">Giorno di Scadenza Rate <span class=\"text-danger\">*</span></label>\n                            <div class=\"input-group\">\n                                <span class=\"input-group-text\">Ogni</span>\n                                <input type=\"number\" min=\"1\" max=\"28\" name=\"giorno_scadenza_mensile\" class=\"form-control\" value=\"10\" required>\n                                <span class=\"input-group-text\">del mese</span>\n                            </div>\n                        </div>\n\n                        <div class=\"col-md-6\">\n                            <label class=\"form-label fw-bold\">Data Inizio Corso <span class=\"text-danger\">*</span></label>\n                            <input type=\"date\" name=\"data_inizio\" class=\"form-control\" value=\"2024-09-01\" required>\n                        </div>\n                        <div class=\"col-md-6\">\n                            <label class=\"form-label fw-bold\">Data Fine Corso <span class=\"text-danger\">*</span></label>\n                            <input type=\"date\" name=\"data_fine\" class=\"form-control\" value=\"2025-05-31\" required>\n                        </div>\n\n                        <div class=\"col-12\">\n                            <label class=\"form-label fw-bold\">Descrizione / Giorni e Orari Allenamento</label>\n                            <textarea name=\"descrizione\" class=\"form-control\" rows=\"2\" placeholder=\"es. Allenamenti Lunedì e Mercoledì dalle 17:00 alle 18:30 presso Palazzetto dello Sport\"></textarea>\n                        </div>\n                    </div>\n                </div>\n                <div class=\"modal-footer bg-light\">\n                    <button type=\"button\" class=\"btn btn-secondary\" data-bs-dismiss=\"modal\">Annulla</button>\n                    <button type=\"submit\" class=\"btn btn-primary fw-bold\"><i class=\"bi bi-check-lg me-1\"></i> Salva e Crea Gruppo</button>\n                </div>\n            </form>\n        </div>\n    </div>\n</div>\n\n<!-- MODAL: ISCRIVI ATLETA A GRUPPO -->\n<div class=\"modal fade\" id=\"modalIscriviGruppo\" tabindex=\"-1\" aria-hidden=\"true\">\n    <div class=\"modal-dialog modal-dialog-centered\">\n        <div class=\"modal-content border-0 rounded-4 shadow\">\n            <div class=\"modal-header bg-primary text-white\">\n                <h5 class=\"modal-title fw-bold\">\n                    <i class=\"bi bi-person-plus me-2\"></i> Iscrivi Atleta a Gruppo\n                </h5>\n                <button type=\"button\" class=\"btn-close btn-close-white\" data-bs-dismiss=\"modal\"></button>\n            </div>\n            <form method=\"POST\" action=\"index.php?action=iscrivi_gruppo\">\n                <div class=\"modal-body p-4\">\n                    <div class=\"mb-3\">\n                        <label class=\"form-label fw-bold\">Seleziona Corso / Gruppo <span class=\"text-danger\">*</span></label>\n                        <select name=\"gruppo_id\" class=\"form-select\" required>\n                            <option value=\"\">-- Seleziona un gruppo --</option>\n                            <?php foreach ($gruppi as $g): ?>\n                                <option value=\"<?= $g['id'] ?>\">\n                                    <?= htmlspecialchars($g['nome_gruppo']) ?> (€ <?= number_format($g['quota_mensile'], 2) ?>/mese)\n                                </option>\n                            <?php endforeach; ?>\n                        </select>\n                    </div>\n\n                    <div class=\"mb-3\">\n                        <label class=\"form-label fw-bold\">Seleziona Atleta Tesserato <span class=\"text-danger\">*</span></label>\n                        <select name=\"tesserato_id\" class=\"form-select\" required>\n                            <option value=\"\">-- Seleziona atleta --</option>\n                            <?php foreach ($tesseratiAttivi as $t): ?>\n                                <option value=\"<?= $t['tesserato_id'] ?>\">\n                                    <?= htmlspecialchars($t['cognome'] . ' ' . $t['nome']) ?> (Tessera: <?= htmlspecialchars($t['numero_tessera']) ?><?= $t['is_minorenne'] ? ' - Minorenne' : '' ?>)\n                                </option>\n                            <?php endforeach; ?>\n                        </select>\n                    </div>\n\n                    <div class=\"mb-3\">\n                        <label class=\"form-label fw-bold\">Data Iscrizione</label>\n                        <input type=\"date\" name=\"data_iscrizione\" class=\"form-control\" value=\"<?= date('Y-m-d') ?>\" required>\n                    </div>\n\n                    <div class=\"mb-3\">\n                        <label class=\"form-label fw-bold\">Note Iscrizione</label>\n                        <input type=\"text\" name=\"note\" class=\"form-control\" placeholder=\"es. Iscrizione con prova completata\">\n                    </div>\n\n                    <div class=\"form-check p-3 bg-light rounded-3\">\n                        <input class=\"form-check-input\" type=\"checkbox\" name=\"genera_quote\" value=\"1\" id=\"checkGeneraQuote\" checked>\n                        <label class=\"form-check-label small fw-bold\" for=\"checkGeneraQuote\">\n                            Genera subito automaticamente tutte le rate mensili del corso per questo atleta\n                        </label>\n                    </div>\n                </div>\n                <div class=\"modal-footer bg-light\">\n                    <button type=\"button\" class=\"btn btn-secondary\" data-bs-dismiss=\"modal\">Annulla</button>\n                    <button type=\"submit\" class=\"btn btn-primary fw-bold\"><i class=\"bi bi-check-lg me-1\"></i> Conferma Iscrizione</button>\n                </div>\n            </form>\n        </div>\n    </div>\n</div>\n\n<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>\n"
   },
   {
-    path: 'private/pages/login.php',
-    filename: 'login.php',
-    folder: 'private/pages',
-    language: 'php',
-    description: 'Pagina di autenticazione con credenziali predefinite, grafica moderna Bootstrap 5 e sicurezza sessioni',
-    content: `<?php
-/**
- * Pagina di Login & Autenticazione
- * Posizione: /private/pages/login.php
- */
-$error = '';
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = trim($_POST['username'] ?? '');
-    $password = $_POST['password'] ?? '';
-
-    if (empty($username) || empty($password)) {
-        $error = 'Inserisci sia il nome utente che la password.';
-    } else {
-        if (loginUser($username, $password)) {
-            $u = getCurrentUser();
-            if (!empty($u['is_kiosk'])) {
-                header('Location: index.php?page=kiosk');
-            } else {
-                header('Location: index.php?page=gestionale');
-            }
-            exit;
-        } else {
-            $error = 'Credenziali non valide. Verifica username e password.';
-        }
-    }
-}
-?>
-<!DOCTYPE html>
-<html lang="it">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Accedi - SportGestionale</title>
-    <!-- Bootstrap 5 CSS & Icons (100% Offline in locale) -->
-    <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/bootstrap-icons.min.css">
-    <style>
-        body {
-            background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: system-ui, -apple-system, sans-serif;
-        }
-        .login-card {
-            max-width: 440px;
-            width: 100%;
-            border-radius: 1.25rem;
-            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
-            background: #ffffff;
-            overflow: hidden;
-        }
-        .login-header {
-            background: #0d6efd;
-            color: #ffffff;
-            padding: 2.25rem 2rem 1.75rem;
-            text-align: center;
-        }
-    </style>
-</head>
-<body class="p-3">
-<div class="login-card">
-    <div class="login-header">
-        <div class="d-inline-flex p-3 bg-white bg-opacity-25 rounded-circle mb-3">
-            <i class="bi bi-shield-lock-fill fs-2 text-white"></i>
-        </div>
-        <h3 class="fw-bold mb-1">SportGestionale</h3>
-        <p class="text-white-50 small mb-0">Accesso sicuro al sistema ASD / Polisportiva</p>
-    </div>
-
-    <div class="p-4 p-md-5">
-        <?php if (!empty($error)): ?>
-            <div class="alert alert-danger d-flex align-items-center gap-2 small py-2 px-3 mb-4" role="alert">
-                <i class="bi bi-exclamation-triangle-fill fs-5"></i>
-                <div><?= htmlspecialchars($error) ?></div>
-            </div>
-        <?php endif; ?>
-
-        <form method="POST" action="index.php?page=login">
-            <div class="mb-3">
-                <label for="username" class="form-label fw-semibold small text-muted">Nome Utente</label>
-                <div class="input-group">
-                    <span class="input-group-text bg-light text-muted"><i class="bi bi-person"></i></span>
-                    <input type="text" class="form-control" id="username" name="username" placeholder="es. admin o kiosk" required autofocus>
-                </div>
-            </div>
-
-            <div class="mb-4">
-                <label for="password" class="form-label fw-semibold small text-muted">Password</label>
-                <div class="input-group">
-                    <span class="input-group-text bg-light text-muted"><i class="bi bi-key"></i></span>
-                    <input type="password" class="form-control" id="password" name="password" placeholder="••••••••" required>
-                </div>
-            </div>
-
-            <button type="submit" class="btn btn-primary w-100 py-2 fw-bold shadow-sm">
-                <i class="bi bi-box-arrow-in-right me-1"></i> Accedi
-            </button>
-        </form>
-
-        <div class="mt-4 pt-3 border-top">
-            <h6 class="text-muted small fw-bold text-uppercase mb-2" style="font-size: 0.72rem;">Credenziali Predefinite:</h6>
-            <div class="d-flex flex-column gap-2 small">
-                <div class="p-2 bg-light rounded border d-flex justify-content-between align-items-center">
-                    <div>
-                        <strong>Amministratore:</strong> <code>admin</code>
-                    </div>
-                    <span class="badge bg-secondary-subtle text-secondary">admin123</span>
-                </div>
-                <div class="p-2 bg-light rounded border d-flex justify-content-between align-items-center">
-                    <div>
-                        <strong>Desk Reception:</strong> <code>kiosk</code>
-                    </div>
-                    <span class="badge bg-warning-subtle text-warning-emphasis">admin123</span>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-<!-- Bootstrap 5 JS Bundle (100% Offline in locale) -->
-<script src="assets/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
-`
+    "path": "private/pages/quote.php",
+    "filename": "quote.php",
+    "folder": "private/pages",
+    "language": "php",
+    "description": "Scadenziario quote con prospetto mensile analitico e tabella dettagliata",
+    "content": "<?php\n/**\n * Scadenziario Quote Mensili con Riepilogo Mese per Mese\n * Posizione: /private/pages/quote.php\n */\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';\n$db = getDbConnection();\n\n$vista = $_GET['vista'] ?? (isset($_GET['mese']) ? 'tabella' : 'previsione');\n$search = trim($_GET['search'] ?? '');\n$meseFiltro = trim($_GET['mese'] ?? '');\n$statoFiltro = trim($_GET['stato'] ?? '');\n$gruppoFiltro = !empty($_GET['gruppo_id']) ? (int)$_GET['gruppo_id'] : 0;\n\n// Utility nomi mesi italiani\nfunction formattaMeseItaliano($m) {\n    if (!$m) return '';\n    $parts = explode('-', $m);\n    if (count($parts) < 2) return $m;\n    $mesi = [\n        '01' => 'Gennaio', '02' => 'Febbraio', '03' => 'Marzo',\n        '04' => 'Aprile', '05' => 'Maggio', '06' => 'Giugno',\n        '07' => 'Luglio', '08' => 'Agosto', '09' => 'Settembre',\n        '10' => 'Ottobre', '11' => 'Novembre', '12' => 'Dicembre'\n    ];\n    $nome = $mesi[$parts[1]] ?? $parts[1];\n    return \"{$nome} {$parts[0]}\";\n}\n\n// 1. Statistiche Complessive Stagione\n$statsTotali = $db->query(\"\n    SELECT \n        COUNT(*) AS totale_quote,\n        COALESCE(SUM(importo), 0) AS valore_totale,\n        COALESCE(SUM(importo_pagato), 0) AS totale_incassato,\n        COALESCE(SUM(importo - importo_pagato), 0) AS totale_residuo\n    FROM quote\n    WHERE stato != 'annullata'\n\")->fetch();\n\n$valoreTotale = (float)$statsTotali['valore_totale'];\n$totaleIncassato = (float)$statsTotali['totale_incassato'];\n$totaleResiduo = (float)$statsTotali['totale_residuo'];\n$percIncasso = $valoreTotale > 0 ? round(($totaleIncassato / $valoreTotale) * 100) : 0;\n\n// Quote scadute\n$statsScadute = $db->query(\"\n    SELECT \n        COUNT(*) AS count_scadute,\n        COALESCE(SUM(importo - importo_pagato), 0) AS importo_scaduto\n    FROM quote\n    WHERE stato != 'pagata' AND stato != 'annullata' AND data_scadenza < CURDATE()\n\")->fetch();\n$quoteScaduteCount = (int)$statsScadute['count_scadute'];\n$totaleScaduto = (float)$statsScadute['importo_scaduto'];\n\n// 2. Mesi disponibili & Raggruppamento per Mese\n$mesiDisponibili = $db->query(\"\n    SELECT DISTINCT mese_riferimento \n    FROM quote \n    WHERE mese_riferimento IS NOT NULL \n    ORDER BY mese_riferimento ASC\n\")->fetchAll(PDO::FETCH_COLUMN);\n\n// Se non ci sono ancora quote con mese_riferimento, proponi mesi stagione standard\nif (empty($mesiDisponibili)) {\n    $mesiDisponibili = ['2024-09', '2024-10', '2024-11', '2024-12', '2025-01', '2025-02', '2025-03', '2025-04', '2025-05', '2025-06'];\n}\n\n$riepilogoMesi = [];\nforeach ($mesiDisponibili as $m) {\n    $stmtM = $db->prepare(\"\n        SELECT \n            COUNT(*) AS count_quote,\n            COALESCE(SUM(importo), 0) AS previsto,\n            COALESCE(SUM(importo_pagato), 0) AS incassato,\n            COALESCE(SUM(importo - importo_pagato), 0) AS residuo,\n            COALESCE(SUM(CASE WHEN stato != 'pagata' AND stato != 'annullata' AND data_scadenza < CURDATE() THEN (importo - importo_pagato) ELSE 0 END), 0) AS scaduto,\n            SUM(CASE WHEN stato = 'pagata' THEN 1 ELSE 0 END) AS pagate,\n            SUM(CASE WHEN stato = 'parziale' THEN 1 ELSE 0 END) AS parziali,\n            SUM(CASE WHEN stato = 'da_pagare' THEN 1 ELSE 0 END) AS da_pagare\n        FROM quote\n        WHERE mese_riferimento = ? AND stato != 'annullata'\n    \");\n    $stmtM->execute([$m]);\n    $rowM = $stmtM->fetch();\n    $previstoM = (float)$rowM['previsto'];\n    $incassatoM = (float)$rowM['incassato'];\n    $percM = $previstoM > 0 ? round(($incassatoM / $previstoM) * 100) : 0;\n\n    $riepilogoMesi[] = [\n        'mese' => $m,\n        'label' => formattaMeseItaliano($m),\n        'count' => (int)$rowM['count_quote'],\n        'previsto' => $previstoM,\n        'incassato' => $incassatoM,\n        'residuo' => (float)$rowM['residuo'],\n        'scaduto' => (float)$rowM['scaduto'],\n        'perc' => $percM,\n        'pagate' => (int)$rowM['pagate'],\n        'parziali' => (int)$rowM['parziali'],\n        'da_pagare' => (int)$rowM['da_pagare']\n    ];\n}\n\n// 3. Query per Tabella Singole Quote\n$sqlTabella = \"\n    SELECT q.*, p.nome, p.cognome, p.is_minorenne, t.numero_tessera, g.nome_gruppo\n    FROM quote q\n    INNER JOIN tesserati t ON q.tesserato_id = t.id\n    INNER JOIN persone p ON t.persona_id = p.id\n    LEFT JOIN gruppi g ON q.gruppo_id = g.id\n    WHERE 1=1\n\";\n$paramsTabella = [];\n\nif ($search !== '') {\n    $sqlTabella .= \" AND (p.nome LIKE ? OR p.cognome LIKE ? OR t.numero_tessera LIKE ? OR q.causale LIKE ?)\";\n    $paramsTabella[] = \"%$search%\";\n    $paramsTabella[] = \"%$search%\";\n    $paramsTabella[] = \"%$search%\";\n    $paramsTabella[] = \"%$search%\";\n}\nif ($meseFiltro !== '') {\n    $sqlTabella .= \" AND q.mese_riferimento = ?\";\n    $paramsTabella[] = $meseFiltro;\n}\nif ($gruppoFiltro > 0) {\n    $sqlTabella .= \" AND q.gruppo_id = ?\";\n    $paramsTabella[] = $gruppoFiltro;\n}\nif ($statoFiltro === 'scadute') {\n    $sqlTabella .= \" AND q.stato != 'pagata' AND q.stato != 'annullata' AND q.data_scadenza < CURDATE()\";\n} elseif ($statoFiltro !== '') {\n    $sqlTabella .= \" AND q.stato = ?\";\n    $paramsTabella[] = $statoFiltro;\n}\n\n$sqlTabella .= \" ORDER BY q.data_scadenza DESC, q.id DESC\";\n$stmtTabella = $db->prepare($sqlTabella);\n$stmtTabella->execute($paramsTabella);\n$quoteElenco = $stmtTabella->fetchAll();\n\n// Gruppi per dropdown filtro\n$elencoGruppi = $db->query(\"SELECT id, nome_gruppo FROM gruppi ORDER BY nome_gruppo ASC\")->fetchAll();\n?>\n\n<div class=\"d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2\">\n    <div>\n        <h2 class=\"h3 fw-bold mb-1 d-flex align-items-center\">\n            <i class=\"bi bi-cash-stack text-primary me-2\"></i> Scadenziario Quote Mensili\n        </h2>\n        <p class=\"text-muted small mb-0\">Controllo pagamenti, quote emesse e stati di riscossione per la stagione sportiva</p>\n    </div>\n    <div class=\"d-flex gap-2\">\n        <a href=\"index.php?action=genera_quote&redirect=quote\" class=\"btn btn-outline-primary shadow-sm\" onclick=\"return confirm('Generare/sincronizzare tutte le quote per i gruppi attivi?');\">\n            <i class=\"bi bi-lightning-charge me-1\"></i> Genera / Sincronizza Quote\n        </a>\n        <a href=\"index.php?page=quote&vista=tabella&stato=scadute\" class=\"btn btn-outline-danger shadow-sm fw-bold\">\n            <i class=\"bi bi-exclamation-triangle me-1\"></i> Quote Scadute (<?= $quoteScaduteCount ?>)\n        </a>\n    </div>\n</div>\n\n<!-- 4 KPI CARDS -->\n<div class=\"row g-3 mb-4\">\n    <div class=\"col-12 col-sm-6 col-xl-3\">\n        <div class=\"card border-0 shadow-sm rounded-4 h-100 bg-white p-3\">\n            <div class=\"d-flex align-items-center\">\n                <div class=\"bg-primary-subtle text-primary p-3 rounded-4 me-3\">\n                    <i class=\"bi bi-wallet2 fs-3\"></i>\n                </div>\n                <div>\n                    <span class=\"text-muted small d-block\">Valore Totale Quote</span>\n                    <h4 class=\"fw-bold text-dark mb-0\">€ <?= number_format($valoreTotale, 2, ',', '.') ?></h4>\n                    <span class=\"text-muted small\"><?= (int)$statsTotali['totale_quote'] ?> rate generate</span>\n                </div>\n            </div>\n        </div>\n    </div>\n    <div class=\"col-12 col-sm-6 col-xl-3\">\n        <div class=\"card border-0 shadow-sm rounded-4 h-100 bg-white p-3\">\n            <div class=\"d-flex align-items-center\">\n                <div class=\"bg-success-subtle text-success p-3 rounded-4 me-3\">\n                    <i class=\"bi bi-check-circle-fill fs-3\"></i>\n                </div>\n                <div>\n                    <span class=\"text-muted small d-block\">Incassato ad Oggi</span>\n                    <h4 class=\"fw-bold text-success mb-0\">€ <?= number_format($totaleIncassato, 2, ',', '.') ?></h4>\n                    <span class=\"badge bg-success-subtle text-success small\"><?= $percIncasso ?>% saldato</span>\n                </div>\n            </div>\n        </div>\n    </div>\n    <div class=\"col-12 col-sm-6 col-xl-3\">\n        <div class=\"card border-0 shadow-sm rounded-4 h-100 bg-white p-3\">\n            <div class=\"d-flex align-items-center\">\n                <div class=\"bg-warning-subtle text-warning p-3 rounded-4 me-3\">\n                    <i class=\"bi bi-hourglass-split fs-3\"></i>\n                </div>\n                <div>\n                    <span class=\"text-muted small d-block\">Residuo da Incassare</span>\n                    <h4 class=\"fw-bold text-dark mb-0\">€ <?= number_format($totaleResiduo, 2, ',', '.') ?></h4>\n                    <span class=\"text-muted small\">In attesa o in scadenza</span>\n                </div>\n            </div>\n        </div>\n    </div>\n    <div class=\"col-12 col-sm-6 col-xl-3\">\n        <div class=\"card border-0 shadow-sm rounded-4 h-100 bg-white p-3\">\n            <div class=\"d-flex align-items-center\">\n                <div class=\"bg-danger-subtle text-danger p-3 rounded-4 me-3\">\n                    <i class=\"bi bi-exclamation-octagon-fill fs-3\"></i>\n                </div>\n                <div>\n                    <span class=\"text-muted small d-block\">Quote Scadute</span>\n                    <h4 class=\"fw-bold text-danger mb-0\">€ <?= number_format($totaleScaduto, 2, ',', '.') ?></h4>\n                    <span class=\"badge bg-danger rounded-pill small\"><?= $quoteScaduteCount ?> rate in ritardo</span>\n                </div>\n            </div>\n        </div>\n    </div>\n</div>\n\n<!-- NAVIGATORE VISTE: PIANO MENSILE VS ELENCO QUOTE -->\n<div class=\"d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2\">\n    <div class=\"btn-group shadow-sm\" role=\"group\">\n        <a href=\"index.php?page=quote&vista=previsione\" class=\"btn btn-sm <?= $vista === 'previsione' ? 'btn-primary fw-bold' : 'btn-outline-primary' ?>\">\n            <i class=\"bi bi-calendar-month me-1\"></i> Riepilogo & Scadenziario Mensile\n        </a>\n        <a href=\"index.php?page=quote&vista=tabella\" class=\"btn btn-sm <?= $vista === 'tabella' ? 'btn-primary fw-bold' : 'btn-outline-primary' ?>\">\n            <i class=\"bi bi-table me-1\"></i> Elenco Dettagliato Singole Quote\n        </a>\n    </div>\n    <?php if ($vista === 'previsione'): ?>\n        <a href=\"index.php?page=previsioni\" class=\"btn btn-sm btn-outline-success\">\n            <i class=\"bi bi-graph-up-arrow me-1\"></i> Vai al Bilancio Previsionale Completo &rarr;\n        </a>\n    <?php endif; ?>\n</div>\n\n<?php if ($vista === 'previsione'): ?>\n    <!-- TAB 1: RIEPILOGO MESE PER MESE -->\n    <div class=\"card border-0 shadow-sm rounded-4 bg-white overflow-hidden mb-4\">\n        <div class=\"card-header bg-white border-bottom py-3\">\n            <h5 class=\"fw-bold mb-0 text-dark\"><i class=\"bi bi-calendar3 me-2 text-primary\"></i>Piano Incassi Quote Mese per Mese</h5>\n            <small class=\"text-muted\">Prospetto analitico delle quote per ciascun mese della stagione sportiva</small>\n        </div>\n        <div class=\"table-responsive\">\n            <table class=\"table table-hover align-middle mb-0\">\n                <thead class=\"table-light small text-uppercase\">\n                    <tr>\n                        <th>Mese Stagione</th>\n                        <th>Quote Generate</th>\n                        <th>Incassato Reale</th>\n                        <th>Residuo da Saldare</th>\n                        <th>Scaduto in Ritardo</th>\n                        <th>Ripartizione Stato Rate</th>\n                        <th class=\"text-end\">Azione</th>\n                    </tr>\n                </thead>\n                <tbody>\n                    <?php if (empty($riepilogoMesi)): ?>\n                        <tr><td colspan=\"7\" class=\"text-center py-4 text-muted\">Nessuna quota registrata. Clicca su \"Genera Quote\" per calcolarle.</td></tr>\n                    <?php else: foreach ($riepilogoMesi as $rm): ?>\n                        <tr>\n                            <td>\n                                <strong class=\"text-dark fs-6\"><?= htmlspecialchars($rm['label']) ?></strong>\n                                <div class=\"small text-muted\">Codice: <?= htmlspecialchars($rm['mese']) ?></div>\n                            </td>\n                            <td>\n                                <strong class=\"text-dark\">€ <?= number_format($rm['previsto'], 2, ',', '.') ?></strong>\n                                <div class=\"small text-muted\"><?= $rm['count'] ?> rate</div>\n                            </td>\n                            <td>\n                                <strong class=\"text-success\">€ <?= number_format($rm['incassato'], 2, ',', '.') ?></strong>\n                                <div class=\"progress mt-1\" style=\"height: 6px; width: 100px;\">\n                                    <div class=\"progress-bar bg-success\" role=\"progressbar\" style=\"width: <?= $rm['perc'] ?>%;\"></div>\n                                </div>\n                                <small class=\"text-muted\"><?= $rm['perc'] ?>% incassato</small>\n                            </td>\n                            <td>\n                                <strong class=\"text-warning text-dark\">€ <?= number_format($rm['residuo'], 2, ',', '.') ?></strong>\n                            </td>\n                            <td>\n                                <?php if ($rm['scaduto'] > 0): ?>\n                                    <strong class=\"text-danger\">€ <?= number_format($rm['scaduto'], 2, ',', '.') ?></strong>\n                                    <span class=\"badge bg-danger ms-1\">Scaduto</span>\n                                <?php else: ?>\n                                    <span class=\"text-muted\">-</span>\n                                <?php endif; ?>\n                            </td>\n                            <td>\n                                <span class=\"badge bg-success-subtle text-success me-1\"><?= $rm['pagate'] ?> pagate</span>\n                                <span class=\"badge bg-warning-subtle text-warning me-1\"><?= $rm['parziali'] ?> parziali</span>\n                                <span class=\"badge bg-secondary-subtle text-secondary\"><?= $rm['da_pagare'] ?> da pagare</span>\n                            </td>\n                            <td class=\"text-end\">\n                                <a href=\"index.php?page=quote&vista=tabella&mese=<?= urlencode($rm['mese']) ?>\" class=\"btn btn-sm btn-outline-primary\">\n                                    <i class=\"bi bi-eye me-1\"></i> Dettaglio Mese\n                                </a>\n                            </td>\n                        </tr>\n                    <?php endforeach; endif; ?>\n                </tbody>\n            </table>\n        </div>\n    </div>\n\n<?php else: ?>\n    <!-- TAB 2: ELENCO DETTAGLIATO SINGOLE QUOTE -->\n    <!-- Filtri di ricerca -->\n    <div class=\"card border-0 shadow-sm rounded-4 mb-3 bg-white\">\n        <div class=\"card-body p-3\">\n            <form method=\"GET\" class=\"row g-2 align-items-center\">\n                <input type=\"hidden\" name=\"page\" value=\"quote\">\n                <input type=\"hidden\" name=\"vista\" value=\"tabella\">\n                <div class=\"col-md-3\">\n                    <input type=\"text\" name=\"search\" class=\"form-control form-control-sm\" placeholder=\"Cerca Atleta o Tessera...\" value=\"<?= htmlspecialchars($search) ?>\">\n                </div>\n                <div class=\"col-md-3\">\n                    <select name=\"mese\" class=\"form-select form-select-sm\">\n                        <option value=\"\">Tutti i Mesi</option>\n                        <?php foreach ($mesiDisponibili as $m): ?>\n                            <option value=\"<?= $m ?>\" <?= $meseFiltro === $m ? 'selected' : '' ?>><?= formattaMeseItaliano($m) ?></option>\n                        <?php endforeach; ?>\n                    </select>\n                </div>\n                <div class=\"col-md-2\">\n                    <select name=\"gruppo_id\" class=\"form-select form-select-sm\">\n                        <option value=\"0\">Tutti i Gruppi</option>\n                        <?php foreach ($elencoGruppi as $eg): ?>\n                            <option value=\"<?= $eg['id'] ?>\" <?= $gruppoFiltro === (int)$eg['id'] ? 'selected' : '' ?>><?= htmlspecialchars($eg['nome_gruppo']) ?></option>\n                        <?php endforeach; ?>\n                    </select>\n                </div>\n                <div class=\"col-md-2\">\n                    <select name=\"stato\" class=\"form-select form-select-sm\">\n                        <option value=\"\">Tutti gli Stati</option>\n                        <option value=\"da_pagare\" <?= $statoFiltro === 'da_pagare' ? 'selected' : '' ?>>Da Pagare</option>\n                        <option value=\"parziale\" <?= $statoFiltro === 'parziale' ? 'selected' : '' ?>>Parziale</option>\n                        <option value=\"pagata\" <?= $statoFiltro === 'pagata' ? 'selected' : '' ?>>Pagata</option>\n                        <option value=\"scadute\" <?= $statoFiltro === 'scadute' ? 'selected' : '' ?>>Solo Scadute</option>\n                        <option value=\"annullata\" <?= $statoFiltro === 'annullata' ? 'selected' : '' ?>>Annullata</option>\n                    </select>\n                </div>\n                <div class=\"col-md-2 d-flex gap-1\">\n                    <button type=\"submit\" class=\"btn btn-sm btn-primary flex-fill\"><i class=\"bi bi-filter me-1\"></i> Filtra</button>\n                    <a href=\"index.php?page=quote&vista=tabella\" class=\"btn btn-sm btn-outline-secondary\" title=\"Reset filtri\"><i class=\"bi bi-arrow-counterclockwise\"></i></a>\n                </div>\n            </form>\n        </div>\n    </div>\n\n    <!-- Tabella Quote -->\n    <div class=\"card border-0 shadow-sm rounded-4 bg-white overflow-hidden mb-4\">\n        <div class=\"table-responsive\">\n            <table class=\"table table-hover align-middle mb-0\">\n                <thead class=\"table-light small text-uppercase\">\n                    <tr>\n                        <th>Scadenza</th>\n                        <th>Mese Rif.</th>\n                        <th>Atleta / Tessera</th>\n                        <th>Corso / Gruppo</th>\n                        <th>Causale</th>\n                        <th>Importo</th>\n                        <th>Incassato</th>\n                        <th>Stato</th>\n                        <th class=\"text-end\">Azioni</th>\n                    </tr>\n                </thead>\n                <tbody>\n                    <?php if (empty($quoteElenco)): ?>\n                        <tr><td colspan=\"9\" class=\"text-center py-4 text-muted\">Nessuna quota trovata con i filtri impostati.</td></tr>\n                    <?php else: foreach ($quoteElenco as $q): ?>\n                        <?php\n                            $isScaduta = ($q['stato'] !== 'pagata' && $q['stato'] !== 'annullata' && strtotime($q['data_scadenza']) < strtotime(date('Y-m-d')));\n                            $badgeClass = 'bg-secondary';\n                            $statoTesto = $q['stato'];\n                            if ($q['stato'] === 'pagata') {\n                                $badgeClass = 'bg-success';\n                                $statoTesto = 'Pagata';\n                            } elseif ($q['stato'] === 'parziale') {\n                                $badgeClass = 'bg-warning text-dark';\n                                $statoTesto = 'Parziale';\n                            } elseif ($isScaduta) {\n                                $badgeClass = 'bg-danger';\n                                $statoTesto = 'Scaduta';\n                            } elseif ($q['stato'] === 'da_pagare') {\n                                $badgeClass = 'bg-primary-subtle text-primary';\n                                $statoTesto = 'Da Pagare';\n                            } elseif ($q['stato'] === 'annullata') {\n                                $badgeClass = 'bg-secondary text-white';\n                                $statoTesto = 'Annullata';\n                            }\n                            $residuoQuota = (float)$q['importo'] - (float)$q['importo_pagato'];\n                        ?>\n                        <tr class=\"<?= $isScaduta ? 'table-danger-subtle' : '' ?>\">\n                            <td>\n                                <strong><?= date('d/m/Y', strtotime($q['data_scadenza'])) ?></strong>\n                                <?php if ($isScaduta): ?>\n                                    <div class=\"badge bg-danger\" style=\"font-size: 0.65rem;\">Scaduta</div>\n                                <?php endif; ?>\n                            </td>\n                            <td><span class=\"badge bg-light text-dark\"><?= htmlspecialchars($q['mese_riferimento'] ?: '-') ?></span></td>\n                            <td>\n                                <strong><?= htmlspecialchars($q['cognome'] . ' ' . $q['nome']) ?></strong>\n                                <div class=\"small text-muted\">Tessera: <code><?= htmlspecialchars($q['numero_tessera']) ?></code></div>\n                            </td>\n                            <td><?= htmlspecialchars($q['nome_gruppo'] ?: 'Quota Libera') ?></td>\n                            <td><span class=\"small text-muted\"><?= htmlspecialchars($q['causale']) ?></span></td>\n                            <td><strong>€ <?= number_format($q['importo'], 2, ',', '.') ?></strong></td>\n                            <td>\n                                <?php if ((float)$q['importo_pagato'] > 0): ?>\n                                    <span class=\"text-success fw-bold\">€ <?= number_format($q['importo_pagato'], 2, ',', '.') ?></span>\n                                <?php else: ?>\n                                    <span class=\"text-muted\">-</span>\n                                <?php endif; ?>\n                            </td>\n                            <td><span class=\"badge <?= $badgeClass ?>\"><?= $statoTesto ?></span></td>\n                            <td class=\"text-end\">\n                                <div class=\"d-flex justify-content-end gap-1\">\n                                    <?php if ($q['stato'] !== 'pagata' && $q['stato'] !== 'annullata'): ?>\n                                        <button\n                                            type=\"button\"\n                                            class=\"btn btn-sm btn-success fw-bold\"\n                                            data-bs-toggle=\"modal\"\n                                            data-bs-target=\"#modalPagaQuota_<?= $q['id'] ?>\"\n                                            title=\"Registra Incasso Quota\"\n                                        >\n                                            <i class=\"bi bi-wallet2 me-1\"></i> Incassa\n                                        </button>\n                                        <form method=\"POST\" action=\"index.php?action=annulla_quota\" class=\"d-inline\" onsubmit=\"return confirm('Annullare questa quota (es. per ritiro atleta)?');\">\n                                            <input type=\"hidden\" name=\"id\" value=\"<?= $q['id'] ?>\">\n                                            <input type=\"hidden\" name=\"redirect\" value=\"quote\">\n                                            <button type=\"submit\" class=\"btn btn-sm btn-outline-secondary\" title=\"Annulla Quota\">\n                                                <i class=\"bi bi-x-circle\"></i>\n                                            </button>\n                                        </form>\n                                    <?php else: ?>\n                                        <span class=\"text-muted small\">&bull; Saldata &bull;</span>\n                                    <?php endif; ?>\n                                </div>\n                            </td>\n                        </tr>\n\n                        <!-- Modal Incasso Quota Specifica -->\n                        <?php if ($q['stato'] !== 'pagata' && $q['stato'] !== 'annullata'): ?>\n                            <div class=\"modal fade\" id=\"modalPagaQuota_<?= $q['id'] ?>\" tabindex=\"-1\" aria-hidden=\"true\">\n                                <div class=\"modal-dialog modal-dialog-centered\">\n                                    <div class=\"modal-content border-0 rounded-4 shadow\">\n                                        <div class=\"modal-header bg-success text-white\">\n                                            <h5 class=\"modal-title fw-bold\"><i class=\"bi bi-cash-coin me-2\"></i>Registra Pagamento Quota</h5>\n                                            <button type=\"button\" class=\"btn-close btn-close-white\" data-bs-dismiss=\"modal\"></button>\n                                        </div>\n                                        <form method=\"POST\" action=\"index.php?action=registra_pagamento\">\n                                            <input type=\"hidden\" name=\"tesserato_id\" value=\"<?= $q['tesserato_id'] ?>\">\n                                            <input type=\"hidden\" name=\"quota_id\" value=\"<?= $q['id'] ?>\">\n                                            <div class=\"modal-body p-4\">\n                                                <div class=\"bg-light p-3 rounded-3 mb-3 small\">\n                                                    <div><strong>Atleta:</strong> <?= htmlspecialchars($q['cognome'] . ' ' . $q['nome']) ?></div>\n                                                    <div><strong>Causale:</strong> <?= htmlspecialchars($q['causale']) ?></div>\n                                                    <div><strong>Importo Quota:</strong> € <?= number_format($q['importo'], 2) ?> | <strong>Residuo:</strong> <span class=\"text-danger fw-bold\">€ <?= number_format($residuoQuota, 2) ?></span></div>\n                                                </div>\n\n                                                <div class=\"mb-3\">\n                                                    <label class=\"form-label fw-bold\">Importo da Incassare (€)</label>\n                                                    <input type=\"number\" step=\"0.50\" name=\"importo\" class=\"form-control\" value=\"<?= number_format($residuoQuota, 2, '.', '') ?>\" max=\"<?= number_format($residuoQuota, 2, '.', '') ?>\" required>\n                                                </div>\n\n                                                <div class=\"mb-3\">\n                                                    <label class=\"form-label fw-bold\">Metodo di Pagamento</label>\n                                                    <select name=\"metodo_pagamento\" class=\"form-select\" required>\n                                                        <option value=\"contanti\">Contanti</option>\n                                                        <option value=\"pos\">POS / Carta di Debito o Credito</option>\n                                                        <option value=\"bonifico\">Bonifico Bancario</option>\n                                                        <option value=\"satispay\">Satispay</option>\n                                                    </select>\n                                                </div>\n\n                                                <div class=\"mb-3\">\n                                                    <label class=\"form-label fw-bold\">Causale Ricevuta</label>\n                                                    <input type=\"text\" name=\"causale\" class=\"form-control\" value=\"Incasso <?= htmlspecialchars($q['causale']) ?>\" required>\n                                                </div>\n\n                                                <div class=\"mb-3\">\n                                                    <label class=\"form-label fw-bold\">Note Aggiuntive</label>\n                                                    <input type=\"text\" name=\"note\" class=\"form-control\" placeholder=\"es. Saldo rate\">\n                                                </div>\n                                            </div>\n                                            <div class=\"modal-footer bg-light\">\n                                                <button type=\"button\" class=\"btn btn-secondary\" data-bs-dismiss=\"modal\">Annulla</button>\n                                                <button type=\"submit\" class=\"btn btn-success fw-bold\"><i class=\"bi bi-check-lg me-1\"></i> Conferma Incasso</button>\n                                            </div>\n                                        </form>\n                                    </div>\n                                </div>\n                            </div>\n                        <?php endif; ?>\n                    <?php endforeach; endif; ?>\n                </tbody>\n            </table>\n        </div>\n    </div>\n<?php endif; ?>\n\n<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>\n"
   },
   {
-    path: 'private/pages/logout.php',
-    filename: 'logout.php',
-    folder: 'private/pages',
-    language: 'php',
-    description: 'Logout utente con distruzione sicura della sessione e redirect al login',
-    content: `<?php
-/**
- * Logout Utente e distruzione sessione
- * Posizione: /private/pages/logout.php
- */
-$_SESSION = [];
-
-if (ini_get("session.use_cookies")) {
-    $params = session_get_cookie_params();
-    setcookie(session_name(), '', time() - 42000,
-        $params["path"], $params["domain"],
-        $params["secure"], $params["httponly"]
-    );
-}
-
-session_destroy();
-header('Location: index.php?page=login');
-exit;
-`
+    "path": "private/pages/quote_scadute.php",
+    "filename": "quote_scadute.php",
+    "folder": "private/pages",
+    "language": "php",
+    "description": "Elenco prioritario e sollecito quote scadute non saldate",
+    "content": "<?php\n/**\n * Tabella Quote Scadute Non Pagate\n * Posizione: /private/pages/quote_scadute.php\n */\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';\n$db = getDbConnection();\n\n// Seleziona tutte le quote con scadenza superata e stato non 'pagata'\n$sql = \"SELECT q.*, t.numero_tessera, p.nome, p.cognome, p.is_minorenne, p.tutore_nome, p.tutore_cognome, p.tutore_telefono,\n               g.nome_gruppo, DATEDIFF(CURRENT_DATE, q.data_scadenza) AS giorni_ritardo\n        FROM quote q\n        INNER JOIN tesserati t ON q.tesserato_id = t.id\n        INNER JOIN persone p ON t.persona_id = p.id\n        LEFT JOIN gruppi g ON q.gruppo_id = g.id\n        WHERE q.data_scadenza < CURRENT_DATE \n          AND q.stato IN ('da_pagare', 'parziale')\n        ORDER BY q.data_scadenza ASC\";\n\n$stmt = $db->query($sql);\n$quoteScadute = $stmt->fetchAll();\n?>\n\n<div class=\"d-flex justify-content-between align-items-center mb-3\">\n    <div>\n        <h2 class=\"h3 fw-bold text-danger mb-0\"><i class=\"bi bi-exclamation-triangle-fill me-2\"></i>Quote Scadute Non Pagate</h2>\n        <p class=\"text-muted small mb-0\">Elenco immediato dei crediti scaduti da sollecitare o incassare</p>\n    </div>\n    <a href=\"index.php?page=quote\" class=\"btn btn-outline-secondary btn-sm\"><i class=\"bi bi-arrow-left me-1\"></i> Torna a Tutte le Quote</a>\n</div>\n\n<div class=\"table-responsive bg-white rounded shadow-sm\">\n    <table class=\"table table-hover align-middle mb-0\">\n        <thead class=\"table-danger text-danger-emphasis\">\n            <tr>\n                <th>Scadenza</th>\n                <th>Giorni Ritardo</th>\n                <th>Atleta</th>\n                <th>Gruppo</th>\n                <th>Causale</th>\n                <th>Da Pagare</th>\n                <th>Referente / Tutore</th>\n                <th class=\"text-end\">Azione</th>\n            </tr>\n        </thead>\n        <tbody>\n            <?php if (empty($quoteScadute)): ?>\n                <tr><td colspan=\"8\" class=\"text-center py-4 text-success\"><i class=\"bi bi-check-circle-fill me-1\"></i> Ottimo! Nessuna quota scaduta in sospeso.</td></tr>\n            <?php else: foreach ($quoteScadute as $q): \n                $saldo = $q['importo'] - $q['importo_pagato'];\n            ?>\n                <tr>\n                    <td><strong class=\"text-danger\"><?= date('d/m/Y', strtotime($q['data_scadenza'])) ?></strong></td>\n                    <td><span class=\"badge bg-danger\"><?= $q['giorni_ritardo'] ?> giorni fa</span></td>\n                    <td><strong><?= htmlspecialchars($q['cognome'] . ' ' . $q['nome']) ?></strong> (<?= htmlspecialchars($q['numero_tessera']) ?>)</td>\n                    <td><?= htmlspecialchars($q['nome_gruppo'] ?? 'Generale') ?></td>\n                    <td><?= htmlspecialchars($q['causale']) ?></td>\n                    <td><span class=\"text-danger fw-bold fs-6\">€ <?= number_format($saldo, 2, ',', '.') ?></span></td>\n                    <td>\n                        <?php if ($q['is_minorenne']): ?>\n                            <small>\n                                <div><i class=\"bi bi-shield me-1\"></i><strong><?= htmlspecialchars($q['tutore_cognome'] . ' ' . $q['tutore_nome']) ?></strong></div>\n                                <div><i class=\"bi bi-telephone me-1\"></i><a href=\"tel:<?= $q['tutore_telefono'] ?>\"><?= $q['tutore_telefono'] ?></a></div>\n                            </small>\n                        <?php else: ?>\n                            <span class=\"text-muted\">Atleta Maggiorenne</span>\n                        <?php endif; ?>\n                    </td>\n                    <td class=\"text-end\">\n                        <a href=\"index.php?page=pagamenti&paga_quota=<?= $q['id'] ?>\" class=\"btn btn-sm btn-success fw-bold\">\n                            <i class=\"bi bi-cash me-1\"></i> Salda Ora\n                        </a>\n                    </td>\n                </tr>\n            <?php endforeach; endif; ?>\n        </tbody>\n    </table>\n</div>\n<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>\n"
   },
   {
-    path: 'private/pages/gestionale.php',
-    filename: 'gestionale.php',
-    folder: 'private/pages',
-    language: 'php',
-    description: 'Dashboard gestionale principale con KPI, quote del mese, riepilogo incassi e avvisi',
-    content: `<?php
-/**
- * Dashboard Gestionale Principale
- * Posizione: /private/pages/gestionale.php
- */
-require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';
-$db = getDbConnection();
-
-// Conteggi e KPI
-$totPersone = (int)$db->query("SELECT COUNT(*) FROM persone")->fetchColumn();
-$totMinorenni = (int)$db->query("SELECT COUNT(*) FROM persone WHERE is_minorenne = 1")->fetchColumn();
-$totTesserati = (int)$db->query("SELECT COUNT(*) FROM tesserati WHERE stato = 'Attivo'")->fetchColumn();
-$totCorsi = (int)$db->query("SELECT COUNT(*) FROM gruppi")->fetchColumn();
-
-// Quote del mese corrente
-$meseCorrente = date('Y-m');
-$stmtQuoteMese = $db->prepare("SELECT COUNT(*) as tot_quote, COALESCE(SUM(importo), 0) as entrate_previste, COALESCE(SUM(importo_pagato), 0) as entrate_incassate FROM quote WHERE mese_riferimento = ? AND stato != 'annullata'");
-$stmtQuoteMese->execute([$meseCorrente]);
-$kpiQuote = $stmtQuoteMese->fetch() ?: ['tot_quote' => 0, 'entrate_previste' => 0, 'entrate_incassate' => 0];
-
-$residuoMese = (float)$kpiQuote['entrate_previste'] - (float)$kpiQuote['entrate_incassate'];
-
-// Quote scadute non saldate
-$totScadute = (int)$db->query("SELECT COUNT(*) FROM quote WHERE data_scadenza < CURRENT_DATE AND stato IN ('da_pagare', 'parziale')")->fetchColumn();
-$importoScaduto = (float)$db->query("SELECT COALESCE(SUM(importo - importo_pagato), 0) FROM quote WHERE data_scadenza < CURRENT_DATE AND stato IN ('da_pagare', 'parziale')")->fetchColumn();
-
-// Ultimi 5 pagamenti registrati
-$ultimiPagamenti = $db->query("
-    SELECT p.*, per.nome, per.cognome, t.numero_tessera
-    FROM pagamenti p
-    INNER JOIN tesserati t ON p.tesserato_id = t.id
-    INNER JOIN persone per ON t.persona_id = per.id
-    ORDER BY p.data_pagamento DESC
-    LIMIT 5
-")->fetchAll();
-
-// Prossime 5 quote in scadenza
-$prossimeQuote = $db->query("
-    SELECT q.*, per.nome, per.cognome, g.nome_gruppo
-    FROM quote q
-    INNER JOIN tesserati t ON q.tesserato_id = t.id
-    INNER JOIN persone per ON t.persona_id = per.id
-    LEFT JOIN gruppi g ON q.gruppo_id = g.id
-    WHERE q.stato IN ('da_pagare', 'parziale')
-    ORDER BY q.data_scadenza ASC
-    LIMIT 5
-")->fetchAll();
-?>
-
-<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-    <div>
-        <h2 class="h3 fw-bold mb-1"><i class="bi bi-speedometer2 text-primary me-2"></i>Dashboard Gestionale</h2>
-        <p class="text-muted small mb-0">Controllo attività sportiva, tesseramenti e situazione quote mensili</p>
-    </div>
-    <div class="d-flex gap-2">
-        <a href="index.php?page=kiosk" class="btn btn-warning text-dark fw-bold btn-sm shadow-sm">
-            <i class="bi bi-tablet-landscape me-1"></i> Apri Kiosk Desk
-        </a>
-    </div>
-</div>
-
-<!-- 4 Grandi KPI -->
-<div class="row g-3 mb-4">
-    <div class="col-sm-6 col-xl-3">
-        <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-primary border-4 h-100">
-            <div class="d-flex justify-content-between">
-                <div>
-                    <span class="text-muted small fw-semibold text-uppercase">Tesserati Attivi</span>
-                    <h3 class="fw-bold my-1 text-primary"><?= $totTesserati ?></h3>
-                    <small class="text-muted">su <?= $totPersone ?> anagrafiche (<?= $totMinorenni ?> minori)</small>
-                </div>
-                <div class="p-3 bg-primary-subtle text-primary rounded-3"><i class="bi bi-people-fill fs-3"></i></div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-sm-6 col-xl-3">
-        <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-success border-4 h-100">
-            <div class="d-flex justify-content-between">
-                <div>
-                    <span class="text-muted small fw-semibold text-uppercase">Quote Questo Mese</span>
-                    <h3 class="fw-bold my-1 text-success">€ <?= number_format($kpiQuote['entrate_incassate'], 2, ',', '.') ?></h3>
-                    <small class="text-muted">Previste: € <?= number_format($kpiQuote['entrate_previste'], 2, ',', '.') ?></small>
-                </div>
-                <div class="p-3 bg-success-subtle text-success rounded-3"><i class="bi bi-cash-coin fs-3"></i></div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-sm-6 col-xl-3">
-        <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-danger border-4 h-100">
-            <div class="d-flex justify-content-between">
-                <div>
-                    <span class="text-muted small fw-semibold text-uppercase">Quote Scadute</span>
-                    <h3 class="fw-bold my-1 text-danger"><?= $totScadute ?></h3>
-                    <small class="text-danger fw-bold">Totale: € <?= number_format($importoScaduto, 2, ',', '.') ?></small>
-                </div>
-                <div class="p-3 bg-danger-subtle text-danger rounded-3"><i class="bi bi-exclamation-triangle-fill fs-3"></i></div>
-            </div>
-            <?php if ($totScadute > 0): ?>
-            <div class="mt-2 pt-2 border-top">
-                <a href="index.php?page=quote_scadute" class="small text-danger fw-bold text-decoration-none">Vedi elenco scadute &rarr;</a>
-            </div>
-            <?php endif; ?>
-        </div>
-    </div>
-
-    <div class="col-sm-6 col-xl-3">
-        <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-info border-4 h-100">
-            <div class="d-flex justify-content-between">
-                <div>
-                    <span class="text-muted small fw-semibold text-uppercase">Corsi & Gruppi</span>
-                    <h3 class="fw-bold my-1 text-info-emphasis"><?= $totCorsi ?></h3>
-                    <small class="text-muted">Stagione Sportiva 2024/2025</small>
-                </div>
-                <div class="p-3 bg-info-subtle text-info rounded-3"><i class="bi bi-diagram-3-fill fs-3"></i></div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Tabelle Rapide -->
-<div class="row g-4">
-    <!-- Prossime Scadenze -->
-    <div class="col-lg-6">
-        <div class="card border-0 shadow-sm rounded-3 h-100 bg-white">
-            <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
-                <h5 class="fw-bold mb-0"><i class="bi bi-calendar-event text-primary me-2"></i>Quote in Scadenza</h5>
-                <a href="index.php?page=quote" class="btn btn-sm btn-outline-primary">Tutte le Quote</a>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light small">
-                        <tr>
-                            <th>Atleta</th>
-                            <th>Gruppo</th>
-                            <th>Scadenza</th>
-                            <th class="text-end">Importo</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($prossimeQuote)): ?>
-                            <tr><td colspan="4" class="text-center py-4 text-muted">Nessuna quota in scadenza.</td></tr>
-                        <?php else: foreach ($prossimeQuote as $q): ?>
-                            <tr>
-                                <td><strong><?= htmlspecialchars($q['cognome'] . ' ' . $q['nome']) ?></strong></td>
-                                <td><span class="badge bg-light text-dark"><?= htmlspecialchars($q['nome_gruppo'] ?? 'Generale') ?></span></td>
-                                <td><?= date('d/m/Y', strtotime($q['data_scadenza'])) ?></td>
-                                <td class="text-end fw-bold text-primary">€ <?= number_format($q['importo'], 2, ',', '.') ?></td>
-                            </tr>
-                        <?php endforeach; endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- Ultimi Pagamenti -->
-    <div class="col-lg-6">
-        <div class="card border-0 shadow-sm rounded-3 h-100 bg-white">
-            <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
-                <h5 class="fw-bold mb-0"><i class="bi bi-wallet2 text-success me-2"></i>Ultimi Incassi Registrati</h5>
-                <a href="index.php?page=pagamenti" class="btn btn-sm btn-outline-success">Tutti i Pagamenti</a>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light small">
-                        <tr>
-                            <th>Ricevuta</th>
-                            <th>Atleta</th>
-                            <th>Data</th>
-                            <th>Metodo</th>
-                            <th class="text-end">Importo</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($ultimiPagamenti)): ?>
-                            <tr><td colspan="5" class="text-center py-4 text-muted">Nessun pagamento registrato di recente.</td></tr>
-                        <?php else: foreach ($ultimiPagamenti as $p): ?>
-                            <tr>
-                                <td><code><?= htmlspecialchars($p['ricevuta_numero']) ?></code></td>
-                                <td><strong><?= htmlspecialchars($p['cognome'] . ' ' . $p['nome']) ?></strong></td>
-                                <td><?= date('d/m/Y H:i', strtotime($p['data_pagamento'])) ?></td>
-                                <td><span class="badge bg-secondary-subtle text-secondary"><?= ucfirst($p['metodo_pagamento']) ?></span></td>
-                                <td class="text-end fw-bold text-success">€ <?= number_format($p['importo'], 2, ',', '.') ?></td>
-                            </tr>
-                        <?php endforeach; endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
-
-<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>
-`
+    "path": "private/pages/previsioni.php",
+    "filename": "previsioni.php",
+    "folder": "private/pages",
+    "language": "php",
+    "description": "Previsione incassi quote, budget spese, piano cassa e prospetto CD",
+    "content": "<?php\n/**\n * Previsione Incassi Quote & Budget Spese Previsionali\n * Posizione: /private/pages/previsioni.php\n */\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';\n$db = getDbConnection();\n\n// Recupera anno attivo e dati associazione\n$annoAttivo = $db->query(\"SELECT * FROM anno WHERE attivo = 1 LIMIT 1\")->fetch() ?: ['id' => 1, 'anno' => '2024/2025'];\n$annoId = (int)$annoAttivo['id'];\n$associazione = $db->query(\"SELECT * FROM associazione WHERE id = 1 LIMIT 1\")->fetch() ?: [\n    'denominazione' => 'A.S.D. Polisportiva Aurora',\n    'codice_fiscale' => '97854120584',\n    'partita_iva' => '04859620581',\n    'indirizzo' => 'Via dello Sport, 24',\n    'cap' => '00153',\n    'comune' => 'Roma',\n    'provincia' => 'RM',\n    'legale_rappresentante' => 'Alessandro Bianchi'\n];\n\n// Categorie e colori spese\n$categorieSpesaConfig = [\n    'Affitto Impianti / Pista' => ['badge' => 'bg-primary text-white', 'icon' => 'bi-building'],\n    'Compensi Tecnici / Allenatori' => ['badge' => 'bg-info text-dark', 'icon' => 'bi-person-badge'],\n    'Tesseramenti & Affiliazioni (FISR/EPS)' => ['badge' => 'bg-success text-white', 'icon' => 'bi-patch-check'],\n    'Assicurazioni' => ['badge' => 'bg-warning text-dark', 'icon' => 'bi-shield-check'],\n    'Materiale Sportivo & Divise' => ['badge' => 'bg-secondary text-white', 'icon' => 'bi-bag'],\n    'Gare & Trasferte' => ['badge' => 'bg-danger text-white', 'icon' => 'bi-trophy'],\n    'Amministrazione & Commercialista' => ['badge' => 'bg-dark text-white', 'icon' => 'bi-file-earmark-spreadsheet'],\n    'Altro' => ['badge' => 'bg-light text-dark border', 'icon' => 'bi-three-dots']\n];\n\n// Recupera spese previsionali a database\n$stmtSpese = $db->prepare(\"SELECT * FROM spese_previsionali WHERE anno_id = ? ORDER BY id ASC\");\n$stmtSpese->execute([$annoId]);\n$speseList = $stmtSpese->fetchAll();\n\n// Mesi della stagione sportiva (default Settembre a Giugno)\n$mesiStagione = [\n    '2024-09', '2024-10', '2024-11', '2024-12',\n    '2025-01', '2025-02', '2025-03', '2025-04', '2025-05', '2025-06'\n];\n\n// Integra con eventuali mesi trovati nelle quote\n$mesiQuote = $db->query(\"SELECT DISTINCT mese_riferimento FROM quote WHERE mese_riferimento IS NOT NULL ORDER BY mese_riferimento ASC\")->fetchAll(PDO::FETCH_COLUMN);\n$tuttiMesi = array_values(array_unique(array_merge($mesiStagione, $mesiQuote)));\nsort($tuttiMesi);\n\n// Utility nomi mesi italiani\nfunction getNomeMeseIT($m) {\n    $parts = explode('-', $m);\n    if (count($parts) < 2) return $m;\n    $nomi = [\n        '01' => 'Gennaio', '02' => 'Febbraio', '03' => 'Marzo',\n        '04' => 'Aprile', '05' => 'Maggio', '06' => 'Giugno',\n        '07' => 'Luglio', '08' => 'Agosto', '09' => 'Settembre',\n        '10' => 'Ottobre', '11' => 'Novembre', '12' => 'Dicembre'\n    ];\n    return ($nomi[$parts[1]] ?? $parts[1]) . ' ' . $parts[0];\n}\n\n// 1. Calcolo del Piano di Cassa Mese per Mese\n$pianoMesi = [];\n$progressivoCassa = 0;\n\n$totaleEntratePreviste = 0;\n$totaleIncassatoReale = 0;\n$totaleResiduoReale = 0;\n$totaleUscitePreviste = 0;\n\nforeach ($tuttiMesi as $m) {\n    // Quote del mese\n    $stmtQ = $db->prepare(\"\n        SELECT \n            COUNT(*) AS count_quote,\n            COALESCE(SUM(importo), 0) AS entrate,\n            COALESCE(SUM(importo_pagato), 0) AS incassato,\n            COALESCE(SUM(importo - importo_pagato), 0) AS residuo\n        FROM quote\n        WHERE mese_riferimento = ? AND stato != 'annullata'\n    \");\n    $stmtQ->execute([$m]);\n    $qData = $stmtQ->fetch();\n\n    $entrateMese = (float)$qData['entrate'];\n    $incassatoMese = (float)$qData['incassato'];\n    $residuoMese = (float)$qData['residuo'];\n\n    // Spese del mese\n    $speseMeseVoci = [];\n    $usciteMese = 0;\n    foreach ($speseList as $spesa) {\n        $includeSpesa = false;\n        if (!empty($spesa['ricorrente'])) {\n            $includeSpesa = true;\n        } else {\n            $mesiJson = !empty($spesa['mesi_json']) ? json_decode($spesa['mesi_json'], true) : [];\n            if (is_array($mesiJson) && in_array($m, $mesiJson)) {\n                $includeSpesa = true;\n            }\n        }\n\n        if ($includeSpesa) {\n            $importoSpesa = (float)$spesa['importo_mensile'];\n            $usciteMese += $importoSpesa;\n            $speseMeseVoci[] = [\n                'titolo' => $spesa['titolo'],\n                'categoria' => $spesa['categoria'],\n                'importo' => $importoSpesa\n            ];\n        }\n    }\n\n    $saldoMese = $entrateMese - $usciteMese;\n    $progressivoCassa += $saldoMese;\n\n    $totaleEntratePreviste += $entrateMese;\n    $totaleIncassatoReale += $incassatoMese;\n    $totaleResiduoReale += $residuoMese;\n    $totaleUscitePreviste += $usciteMese;\n\n    $pianoMesi[] = [\n        'mese' => $m,\n        'label' => getNomeMeseIT($m),\n        'count_quote' => (int)$qData['count_quote'],\n        'entrate' => $entrateMese,\n        'incassato' => $incassatoMese,\n        'residuo' => $residuoMese,\n        'spese_voci' => $speseMeseVoci,\n        'uscite' => $usciteMese,\n        'saldo_mese' => $saldoMese,\n        'progressivo' => $progressivoCassa\n    ];\n}\n\n$saldoFinaleStagione = $totaleEntratePreviste - $totaleUscitePreviste;\n$tassoCopertura = $totaleUscitePreviste > 0 ? round(($totaleEntratePreviste / $totaleUscitePreviste) * 100) : 100;\n?>\n\n<div class=\"d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2\">\n    <div>\n        <h2 class=\"h3 fw-bold mb-1 d-flex align-items-center\">\n            <i class=\"bi bi-graph-up-arrow text-success me-2\"></i> Previsione Incassi Quote & Budget Spese\n        </h2>\n        <p class=\"text-muted small mb-0\">\n            Pianificazione economico-finanziaria per la stagione <?= htmlspecialchars($annoAttivo['anno']) ?>, piano di cassa mensile e simulatore di bilancio\n        </p>\n    </div>\n    <div class=\"d-flex gap-2\">\n        <button class=\"btn btn-outline-secondary shadow-sm\" data-bs-toggle=\"modal\" data-bs-target=\"#modalStampaCd\">\n            <i class=\"bi bi-printer me-1\"></i> Prospetto per Consiglio Direttivo\n        </button>\n        <button class=\"btn btn-primary fw-bold shadow-sm\" data-bs-toggle=\"modal\" data-bs-target=\"#modalNuovaSpesa\">\n            <i class=\"bi bi-plus-lg me-1\"></i> Aggiungi Spesa Previsionale\n        </button>\n    </div>\n</div>\n\n<!-- 4 KPI PRINCIPALI DI BILANCIO -->\n<div class=\"row g-3 mb-4\">\n    <div class=\"col-12 col-sm-6 col-xl-3\">\n        <div class=\"card border-0 shadow-sm rounded-4 h-100 bg-white p-3\">\n            <div class=\"d-flex align-items-center\">\n                <div class=\"bg-primary-subtle text-primary p-3 rounded-4 me-3\">\n                    <i class=\"bi bi-cash-stack fs-3\"></i>\n                </div>\n                <div>\n                    <span class=\"text-muted small d-block\">Entrate Quote Previste</span>\n                    <h4 class=\"fw-bold text-dark mb-0\">€ <span id=\"kpiEntrate\"><?= number_format($totaleEntratePreviste, 2, ',', '.') ?></span></h4>\n                    <span class=\"text-success small fw-bold\">€ <?= number_format($totaleIncassatoReale, 2, ',', '.') ?> già incassati</span>\n                </div>\n            </div>\n        </div>\n    </div>\n    <div class=\"col-12 col-sm-6 col-xl-3\">\n        <div class=\"card border-0 shadow-sm rounded-4 h-100 bg-white p-3\">\n            <div class=\"d-flex align-items-center\">\n                <div class=\"bg-danger-subtle text-danger p-3 rounded-4 me-3\">\n                    <i class=\"bi bi-receipt-cutoff fs-3\"></i>\n                </div>\n                <div>\n                    <span class=\"text-muted small d-block\">Uscite Spese a Budget</span>\n                    <h4 class=\"fw-bold text-danger mb-0\">€ <span id=\"kpiUscite\"><?= number_format($totaleUscitePreviste, 2, ',', '.') ?></span></h4>\n                    <span class=\"text-muted small\"><?= count($speseList) ?> voci di costo configurate</span>\n                </div>\n            </div>\n        </div>\n    </div>\n    <div class=\"col-12 col-sm-6 col-xl-3\">\n        <div class=\"card border-0 shadow-sm rounded-4 h-100 bg-white p-3\">\n            <div class=\"d-flex align-items-center\">\n                <div class=\"p-3 rounded-4 me-3 <?= $saldoFinaleStagione >= 0 ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger' ?>\" id=\"kpiSaldoIconBox\">\n                    <i class=\"bi <?= $saldoFinaleStagione >= 0 ? 'bi-shield-check' : 'bi-exclamation-diamond' ?> fs-3\" id=\"kpiSaldoIcon\"></i>\n                </div>\n                <div>\n                    <span class=\"text-muted small d-block\">Saldo Stimato Stagione</span>\n                    <h4 class=\"fw-bold mb-0 <?= $saldoFinaleStagione >= 0 ? 'text-success' : 'text-danger' ?>\" id=\"kpiSaldoText\">\n                        € <span id=\"kpiSaldoVal\"><?= number_format($saldoFinaleStagione, 2, ',', '.') ?></span>\n                    </h4>\n                    <span class=\"badge <?= $saldoFinaleStagione >= 0 ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger' ?>\" id=\"kpiSaldoBadge\">\n                        <?= $saldoFinaleStagione >= 0 ? 'Attivo di Cassa' : 'Disavanzo Previsto' ?>\n                    </span>\n                </div>\n            </div>\n        </div>\n    </div>\n    <div class=\"col-12 col-sm-6 col-xl-3\">\n        <div class=\"card border-0 shadow-sm rounded-4 h-100 bg-white p-3\">\n            <div class=\"d-flex align-items-center\">\n                <div class=\"bg-info-subtle text-info p-3 rounded-4 me-3\">\n                    <i class=\"bi bi-pie-chart-fill fs-3\"></i>\n                </div>\n                <div>\n                    <span class=\"text-muted small d-block\">Tasso Copertura Spese</span>\n                    <h4 class=\"fw-bold text-dark mb-0\"><span id=\"kpiCopertura\"><?= $tassoCopertura ?></span>%</h4>\n                    <span class=\"text-muted small\">Residuo da incassare: € <?= number_format($totaleResiduoReale, 2, ',', '.') ?></span>\n                </div>\n            </div>\n        </div>\n    </div>\n</div>\n\n<!-- SIMULATORE DI SCENARIO INTERATTIVO -->\n<div class=\"card border-0 shadow-sm rounded-4 bg-white mb-4\">\n    <div class=\"card-header bg-light border-0 py-3 px-4 d-flex justify-content-between align-items-center\">\n        <div>\n            <h5 class=\"fw-bold mb-0 text-dark\">\n                <i class=\"bi bi-sliders2-vertical me-2 text-primary\"></i> Simulatore di Scenario Bilancio\n            </h5>\n            <small class=\"text-muted\">Simula aumenti/diminuzioni di iscritti o variazioni di costi per verificare la tenuta economica</small>\n        </div>\n        <button class=\"btn btn-sm btn-outline-secondary\" type=\"button\" onclick=\"resetSimulator()\">\n            <i class=\"bi bi-arrow-counterclockwise me-1\"></i> Reimposta\n        </button>\n    </div>\n    <div class=\"card-body px-4 py-3\">\n        <div class=\"row g-4 align-items-center\">\n            <div class=\"col-md-6\">\n                <div class=\"d-flex justify-content-between mb-1\">\n                    <label class=\"form-label small fw-bold mb-0 text-dark\">Variazione Iscritti / Incassi Quote:</label>\n                    <span class=\"badge bg-primary fs-6\" id=\"badgeVarQuote\">0%</span>\n                </div>\n                <input type=\"range\" class=\"form-range\" id=\"sliderQuote\" min=\"-30\" max=\"30\" step=\"5\" value=\"0\" oninput=\"aggiornaSimulatore()\">\n                <div class=\"d-flex justify-content-between text-muted small\">\n                    <span>-30%</span>\n                    <span>Nessuna variazione (0%)</span>\n                    <span>+30%</span>\n                </div>\n            </div>\n            <div class=\"col-md-6\">\n                <div class=\"d-flex justify-content-between mb-1\">\n                    <label class=\"form-label small fw-bold mb-0 text-dark\">Variazione Costi / Spese:</label>\n                    <span class=\"badge bg-danger fs-6\" id=\"badgeVarSpese\">0%</span>\n                </div>\n                <input type=\"range\" class=\"form-range\" id=\"sliderSpese\" min=\"-30\" max=\"30\" step=\"5\" value=\"0\" oninput=\"aggiornaSimulatore()\">\n                <div class=\"d-flex justify-content-between text-muted small\">\n                    <span>-30% (Risparmio)</span>\n                    <span>Nessuna variazione (0%)</span>\n                    <span>+30% (Rincari)</span>\n                </div>\n            </div>\n        </div>\n    </div>\n</div>\n\n<!-- TABELLA PIANO DI CASSA MESE PER MESE -->\n<div class=\"card border-0 shadow-sm rounded-4 bg-white overflow-hidden mb-4\">\n    <div class=\"card-header bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center\">\n        <div>\n            <h5 class=\"fw-bold mb-0 text-dark\"><i class=\"bi bi-calendar3 me-2 text-primary\"></i>Piano di Cassa & Flussi Mensili</h5>\n            <small class=\"text-muted\">Entrate quote, uscite spese e progressivo di cassa cumulativo per tutta la stagione</small>\n        </div>\n    </div>\n    <div class=\"table-responsive\">\n        <table class=\"table table-hover align-middle mb-0\" id=\"tabellaPianoCassa\">\n            <thead class=\"table-light small text-uppercase\">\n                <tr>\n                    <th>Mese Stagione</th>\n                    <th>Entrate Quote Previste</th>\n                    <th>Incassato Reale</th>\n                    <th>Spese Previsionali Uscite</th>\n                    <th>Saldo Mensile</th>\n                    <th>Progressivo Cassa</th>\n                </tr>\n            </thead>\n            <tbody>\n                <?php foreach ($pianoMesi as $idx => $pm): ?>\n                    <tr data-base-entrate=\"<?= $pm['entrate'] ?>\" data-base-uscite=\"<?= $pm['uscite'] ?>\">\n                        <td>\n                            <strong class=\"text-dark\"><?= htmlspecialchars($pm['label']) ?></strong>\n                            <div class=\"small text-muted\"><?= htmlspecialchars($pm['mese']) ?></div>\n                        </td>\n                        <td>\n                            <strong class=\"text-dark col-entrate\">€ <?= number_format($pm['entrate'], 2, ',', '.') ?></strong>\n                            <div class=\"small text-muted\"><?= $pm['count_quote'] ?> rate</div>\n                        </td>\n                        <td>\n                            <span class=\"text-success fw-bold\">€ <?= number_format($pm['incassato'], 2, ',', '.') ?></span>\n                            <?php if ($pm['residuo'] > 0): ?>\n                                <div class=\"small text-muted\">Residuo: € <?= number_format($pm['residuo'], 2, ',', '.') ?></div>\n                            <?php endif; ?>\n                        </td>\n                        <td>\n                            <strong class=\"text-danger col-uscite\">€ <?= number_format($pm['uscite'], 2, ',', '.') ?></strong>\n                            <?php if (!empty($pm['spese_voci'])): ?>\n                                <div class=\"small text-truncate text-muted mt-1\" style=\"max-width: 250px;\">\n                                    <?= count($pm['spese_voci']) ?> voci (<?= htmlspecialchars(implode(', ', array_column($pm['spese_voci'], 'titolo'))) ?>)\n                                </div>\n                            <?php else: ?>\n                                <div class=\"small text-muted\">Nessuna spesa prevista</div>\n                            <?php endif; ?>\n                        </td>\n                        <td>\n                            <span class=\"fw-bold col-saldo <?= $pm['saldo_mese'] >= 0 ? 'text-success' : 'text-danger' ?>\">\n                                <?= $pm['saldo_mese'] >= 0 ? '+' : '' ?>€ <?= number_format($pm['saldo_mese'], 2, ',', '.') ?>\n                            </span>\n                        </td>\n                        <td>\n                            <strong class=\"col-progressivo <?= $pm['progressivo'] >= 0 ? 'text-primary' : 'text-danger' ?>\">\n                                € <?= number_format($pm['progressivo'], 2, ',', '.') ?>\n                            </strong>\n                        </td>\n                    </tr>\n                <?php endforeach; ?>\n            </tbody>\n            <tfoot class=\"table-light fw-bold border-top\">\n                <tr>\n                    <td>TOTALI STAGIONE</td>\n                    <td id=\"footEntrate\">€ <?= number_format($totaleEntratePreviste, 2, ',', '.') ?></td>\n                    <td>€ <?= number_format($totaleIncassatoReale, 2, ',', '.') ?></td>\n                    <td id=\"footUscite\" class=\"text-danger\">€ <?= number_format($totaleUscitePreviste, 2, ',', '.') ?></td>\n                    <td id=\"footSaldo\" class=\"<?= $saldoFinaleStagione >= 0 ? 'text-success' : 'text-danger' ?>\">\n                        <?= $saldoFinaleStagione >= 0 ? '+' : '' ?>€ <?= number_format($saldoFinaleStagione, 2, ',', '.') ?>\n                    </td>\n                    <td id=\"footProgressivo\" class=\"<?= $saldoFinaleStagione >= 0 ? 'text-primary' : 'text-danger' ?>\">\n                        € <?= number_format($saldoFinaleStagione, 2, ',', '.') ?>\n                    </td>\n                </tr>\n            </tfoot>\n        </table>\n    </div>\n</div>\n\n<!-- SEZIONE GESTIONE SPESE PREVISIONALI -->\n<div class=\"card border-0 shadow-sm rounded-4 bg-white overflow-hidden mb-4\">\n    <div class=\"card-header bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center\">\n        <div>\n            <h5 class=\"fw-bold mb-0 text-dark\"><i class=\"bi bi-receipt me-2 text-danger\"></i>Voci di Spesa Previsionali a Budget</h5>\n            <small class=\"text-muted\">Elenco dei costi fissi e variabili programmati per la stagione</small>\n        </div>\n        <button class=\"btn btn-sm btn-primary\" data-bs-toggle=\"modal\" data-bs-target=\"#modalNuovaSpesa\">\n            <i class=\"bi bi-plus-lg me-1\"></i> Aggiungi Spesa\n        </button>\n    </div>\n    <div class=\"table-responsive\">\n        <table class=\"table table-hover align-middle mb-0\">\n            <thead class=\"table-light small text-uppercase\">\n                <tr>\n                    <th>Titolo Spesa</th>\n                    <th>Categoria</th>\n                    <th>Importo Canone</th>\n                    <th>Ricorrenza nel Periodo</th>\n                    <th>Note / Dettagli</th>\n                    <th class=\"text-end\">Azione</th>\n                </tr>\n            </thead>\n            <tbody>\n                <?php if (empty($speseList)): ?>\n                    <tr><td colspan=\"6\" class=\"text-center py-4 text-muted\">Nessuna voce di spesa inserita a budget.</td></tr>\n                <?php else: foreach ($speseList as $sp): ?>\n                    <?php \n                        $cfgCat = $categorieSpesaConfig[$sp['categoria']] ?? ['badge' => 'bg-secondary text-white', 'icon' => 'bi-tag'];\n                        $mesiSpec = !empty($sp['mesi_json']) ? json_decode($sp['mesi_json'], true) : [];\n                    ?>\n                    <tr>\n                        <td>\n                            <strong class=\"text-dark\"><?= htmlspecialchars($sp['titolo']) ?></strong>\n                        </td>\n                        <td>\n                            <span class=\"badge <?= $cfgCat['badge'] ?> px-2 py-1\">\n                                <i class=\"bi <?= $cfgCat['icon'] ?> me-1\"></i> <?= htmlspecialchars($sp['categoria']) ?>\n                            </span>\n                        </td>\n                        <td>\n                            <strong class=\"text-danger fs-6\">€ <?= number_format($sp['importo_mensile'], 2, ',', '.') ?></strong>\n                            <small class=\"text-muted\"><?= $sp['ricorrente'] ? '/ mese' : '/ occorrenza' ?></small>\n                        </td>\n                        <td>\n                            <?php if ($sp['ricorrente']): ?>\n                                <span class=\"badge bg-success-subtle text-success\">Tutti i mesi (Ricorrente)</span>\n                            <?php else: ?>\n                                <span class=\"badge bg-info-subtle text-info\"><?= count($mesiSpec) ?> mesi: <?= implode(', ', $mesiSpec) ?></span>\n                            <?php endif; ?>\n                        </td>\n                        <td>\n                            <span class=\"small text-muted\"><?= htmlspecialchars($sp['note'] ?: '-') ?></span>\n                        </td>\n                        <td class=\"text-end\">\n                            <form method=\"POST\" action=\"index.php?action=elimina_spesa\" class=\"d-inline\" onsubmit=\"return confirm('Eliminare questa spesa previsionale dal budget?');\">\n                                <input type=\"hidden\" name=\"id\" value=\"<?= $sp['id'] ?>\">\n                                <button type=\"submit\" class=\"btn btn-sm btn-outline-danger\" title=\"Elimina Spesa\">\n                                    <i class=\"bi bi-trash\"></i>\n                                </button>\n                            </form>\n                        </td>\n                    </tr>\n                <?php endforeach; endif; ?>\n            </tbody>\n        </table>\n    </div>\n</div>\n\n<!-- MODAL: AGGIUNGI SPESA PREVISIONALE -->\n<div class=\"modal fade\" id=\"modalNuovaSpesa\" tabindex=\"-1\" aria-hidden=\"true\">\n    <div class=\"modal-dialog modal-dialog-centered modal-lg\">\n        <div class=\"modal-content border-0 rounded-4 shadow\">\n            <div class=\"modal-header bg-primary text-white\">\n                <h5 class=\"modal-title fw-bold\"><i class=\"bi bi-plus-circle me-2\"></i>Aggiungi Voce di Spesa a Budget</h5>\n                <button type=\"button\" class=\"btn-close btn-close-white\" data-bs-dismiss=\"modal\"></button>\n            </div>\n            <form method=\"POST\" action=\"index.php?action=salva_spesa\">\n                <input type=\"hidden\" name=\"anno_id\" value=\"<?= $annoId ?>\">\n                <div class=\"modal-body p-4\">\n                    <div class=\"row g-3\">\n                        <div class=\"col-md-7\">\n                            <label class=\"form-label fw-bold\">Descrizione Spesa <span class=\"text-danger\">*</span></label>\n                            <input type=\"text\" name=\"titolo\" class=\"form-control\" placeholder=\"es. Canone Affitto Pista / Palestra Comunale\" required>\n                        </div>\n                        <div class=\"col-md-5\">\n                            <label class=\"form-label fw-bold\">Categoria Spesa <span class=\"text-danger\">*</span></label>\n                            <select name=\"categoria\" class=\"form-select\" required>\n                                <?php foreach (array_keys($categorieSpesaConfig) as $cat): ?>\n                                    <option value=\"<?= htmlspecialchars($cat) ?>\"><?= htmlspecialchars($cat) ?></option>\n                                <?php endforeach; ?>\n                            </select>\n                        </div>\n\n                        <div class=\"col-md-6\">\n                            <label class=\"form-label fw-bold\">Importo Mensile / Occorrenza (€) <span class=\"text-danger\">*</span></label>\n                            <div class=\"input-group\">\n                                <span class=\"input-group-text\">€</span>\n                                <input type=\"number\" step=\"0.50\" name=\"importo_mensile\" class=\"form-control\" value=\"200.00\" required>\n                            </div>\n                        </div>\n                        <div class=\"col-md-6\">\n                            <label class=\"form-label fw-bold\">Tipologia Ricorrenza <span class=\"text-danger\">*</span></label>\n                            <select name=\"ricorrente\" class=\"form-select\" id=\"selectRicorrenza\" onchange=\"toggleMesiSpecifici(this.value)\">\n                                <option value=\"1\">Ricorrente ogni mese della stagione</option>\n                                <option value=\"0\">Solo nei mesi specifici selezionati</option>\n                            </select>\n                        </div>\n\n                        <div class=\"col-12 d-none\" id=\"boxMesiSpecifici\">\n                            <label class=\"form-label fw-bold\">Seleziona i mesi in cui si verifica la spesa:</label>\n                            <div class=\"row g-2 bg-light p-3 rounded-3\">\n                                <?php foreach ($tuttiMesi as $m): ?>\n                                    <div class=\"col-6 col-md-4\">\n                                        <div class=\"form-check\">\n                                            <input class=\"form-check-input\" type=\"checkbox\" name=\"mesi[]\" value=\"<?= $m ?>\" id=\"chk_<?= $m ?>\">\n                                            <label class=\"form-check-label small\" for=\"chk_<?= $m ?>\"><?= getNomeMeseIT($m) ?></label>\n                                        </div>\n                                    </div>\n                                <?php endforeach; ?>\n                            </div>\n                        </div>\n\n                        <div class=\"col-12\">\n                            <label class=\"form-label fw-bold\">Note / Dettagli Fornitore o Convenzione</label>\n                            <textarea name=\"note\" class=\"form-control\" rows=\"2\" placeholder=\"es. Fatturazione bimestrale posticipata concordata con l'Ufficio Sport del Comune\"></textarea>\n                        </div>\n                    </div>\n                </div>\n                <div class=\"modal-footer bg-light\">\n                    <button type=\"button\" class=\"btn btn-secondary\" data-bs-dismiss=\"modal\">Annulla</button>\n                    <button type=\"submit\" class=\"btn btn-primary fw-bold\"><i class=\"bi bi-check-lg me-1\"></i> Inserisci Spesa a Budget</button>\n                </div>\n            </form>\n        </div>\n    </div>\n</div>\n\n<!-- MODAL: PROSPETTO CD PER STAMPA -->\n<div class=\"modal fade\" id=\"modalStampaCd\" tabindex=\"-1\" aria-hidden=\"true\">\n    <div class=\"modal-dialog modal-dialog-centered modal-xl\">\n        <div class=\"modal-content border-0 rounded-4 shadow\">\n            <div class=\"modal-header bg-light\">\n                <h5 class=\"modal-title fw-bold\"><i class=\"bi bi-file-earmark-spreadsheet me-2 text-primary\"></i>Prospetto Finanziario per Consiglio Direttivo</h5>\n                <button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"modal\"></button>\n            </div>\n            <div class=\"modal-body p-4\" id=\"areaStampaCd\">\n                <div class=\"border p-4 bg-white rounded-3\">\n                    <!-- Intestazione Associazione -->\n                    <div class=\"d-flex justify-content-between align-items-start border-bottom pb-3 mb-4\">\n                        <div>\n                            <h4 class=\"fw-bold mb-1\"><?= htmlspecialchars($associazione['denominazione']) ?></h4>\n                            <div class=\"small text-muted\"><?= htmlspecialchars($associazione['indirizzo']) ?> - <?= htmlspecialchars($associazione['cap']) ?> <?= htmlspecialchars($associazione['comune']) ?> (<?= htmlspecialchars($associazione['provincia']) ?>)</div>\n                            <div class=\"small text-muted\">C.F.: <?= htmlspecialchars($associazione['codice_fiscale']) ?> <?= $associazione['partita_iva'] ? ' | P.IVA: ' . htmlspecialchars($associazione['partita_iva']) : '' ?></div>\n                        </div>\n                        <div class=\"text-end\">\n                            <div class=\"badge bg-primary fs-6 px-3 py-2\">Bilancio Previsionale <?= htmlspecialchars($annoAttivo['anno']) ?></div>\n                            <div class=\"small text-muted mt-1\">Data documento: <?= date('d/m/Y') ?></div>\n                        </div>\n                    </div>\n\n                    <!-- Riepilogo Sintetico CD -->\n                    <div class=\"row g-3 mb-4\">\n                        <div class=\"col-4\">\n                            <div class=\"border p-3 rounded-3 text-center bg-light\">\n                                <span class=\"text-muted small d-block\">Totale Entrate Quote</span>\n                                <h5 class=\"fw-bold text-success mb-0\">€ <?= number_format($totaleEntratePreviste, 2, ',', '.') ?></h5>\n                            </div>\n                        </div>\n                        <div class=\"col-4\">\n                            <div class=\"border p-3 rounded-3 text-center bg-light\">\n                                <span class=\"text-muted small d-block\">Totale Spese Programmate</span>\n                                <h5 class=\"fw-bold text-danger mb-0\">€ <?= number_format($totaleUscitePreviste, 2, ',', '.') ?></h5>\n                            </div>\n                        </div>\n                        <div class=\"col-4\">\n                            <div class=\"border p-3 rounded-3 text-center bg-light\">\n                                <span class=\"text-muted small d-block\">Risultato Previsionale d'Esercizio</span>\n                                <h5 class=\"fw-bold <?= $saldoFinaleStagione >= 0 ? 'text-primary' : 'text-danger' ?> mb-0\">\n                                    <?= $saldoFinaleStagione >= 0 ? '+' : '' ?>€ <?= number_format($saldoFinaleStagione, 2, ',', '.') ?>\n                                </h5>\n                            </div>\n                        </div>\n                    </div>\n\n                    <!-- Tabella Flussi per CD -->\n                    <h6 class=\"fw-bold text-dark mb-2\">Prospetto Mensilizzato Entrate / Uscite</h6>\n                    <div class=\"table-responsive mb-4\">\n                        <table class=\"table table-bordered table-sm align-middle small\">\n                            <thead class=\"table-light\">\n                                <tr>\n                                    <th>Mese</th>\n                                    <th>Entrate Quote</th>\n                                    <th>Uscite Spese</th>\n                                    <th>Saldo Mensile</th>\n                                    <th>Progressivo Cassa</th>\n                                </tr>\n                            </thead>\n                            <tbody>\n                                <?php foreach ($pianoMesi as $pm): ?>\n                                    <tr>\n                                        <td><strong><?= htmlspecialchars($pm['label']) ?></strong></td>\n                                        <td>€ <?= number_format($pm['entrate'], 2, ',', '.') ?></td>\n                                        <td class=\"text-danger\">€ <?= number_format($pm['uscite'], 2, ',', '.') ?></td>\n                                        <td class=\"<?= $pm['saldo_mese'] >= 0 ? 'text-success' : 'text-danger' ?>\">\n                                            <?= $pm['saldo_mese'] >= 0 ? '+' : '' ?>€ <?= number_format($pm['saldo_mese'], 2, ',', '.') ?>\n                                        </td>\n                                        <td class=\"fw-bold <?= $pm['progressivo'] >= 0 ? 'text-primary' : 'text-danger' ?>\">\n                                            € <?= number_format($pm['progressivo'], 2, ',', '.') ?>\n                                        </td>\n                                    </tr>\n                                <?php endforeach; ?>\n                            </tbody>\n                            <tfoot class=\"table-light fw-bold\">\n                                <tr>\n                                    <td>TOTALE</td>\n                                    <td>€ <?= number_format($totaleEntratePreviste, 2, ',', '.') ?></td>\n                                    <td class=\"text-danger\">€ <?= number_format($totaleUscitePreviste, 2, ',', '.') ?></td>\n                                    <td><?= $saldoFinaleStagione >= 0 ? '+' : '' ?>€ <?= number_format($saldoFinaleStagione, 2, ',', '.') ?></td>\n                                    <td>€ <?= number_format($saldoFinaleStagione, 2, ',', '.') ?></td>\n                                </tr>\n                            </tfoot>\n                        </table>\n                    </div>\n\n                    <!-- Spazio Firme -->\n                    <div class=\"row pt-4 mt-4 border-top\">\n                        <div class=\"col-6 text-center\">\n                            <small class=\"text-muted d-block mb-4\">Il Responsabile Amministrativo</small>\n                            <div class=\"border-bottom mx-auto\" style=\"width: 200px;\"></div>\n                        </div>\n                        <div class=\"col-6 text-center\">\n                            <small class=\"text-muted d-block mb-4\">Il Presidente / Legale Rappresentante</small>\n                            <div class=\"border-bottom mx-auto\" style=\"width: 200px;\"></div>\n                            <small class=\"text-dark fw-bold mt-1 d-block\"><?= htmlspecialchars($associazione['legale_rappresentante']) ?></small>\n                        </div>\n                    </div>\n                </div>\n            </div>\n            <div class=\"modal-footer bg-light\">\n                <button type=\"button\" class=\"btn btn-secondary\" data-bs-dismiss=\"modal\">Chiudi</button>\n                <button type=\"button\" class=\"btn btn-primary fw-bold\" onclick=\"window.print()\">\n                    <i class=\"bi bi-printer me-1\"></i> Stampa Prospetto\n                </button>\n            </div>\n        </div>\n    </div>\n</div>\n\n<script>\nfunction toggleMesiSpecifici(val) {\n    var box = document.getElementById('boxMesiSpecifici');\n    if (val === '0') {\n        box.classList.remove('d-none');\n    } else {\n        box.classList.add('d-none');\n    }\n}\n\nfunction resetSimulator() {\n    document.getElementById('sliderQuote').value = 0;\n    document.getElementById('sliderSpese').value = 0;\n    aggiornaSimulatore();\n}\n\nfunction aggiornaSimulatore() {\n    var vQ = parseInt(document.getElementById('sliderQuote').value, 10);\n    var vS = parseInt(document.getElementById('sliderSpese').value, 10);\n\n    document.getElementById('badgeVarQuote').textContent = (vQ > 0 ? '+' : '') + vQ + '%';\n    document.getElementById('badgeVarSpese').textContent = (vS > 0 ? '+' : '') + vS + '%';\n\n    var rows = document.querySelectorAll('#tabellaPianoCassa tbody tr');\n    var totE = 0;\n    var totU = 0;\n    var prog = 0;\n\n    rows.forEach(function(r) {\n        var baseE = parseFloat(r.getAttribute('data-base-entrate')) || 0;\n        var baseU = parseFloat(r.getAttribute('data-base-uscite')) || 0;\n\n        var simE = baseE * (1 + vQ / 100);\n        var simU = baseU * (1 + vS / 100);\n        var saldo = simE - simU;\n        prog += saldo;\n\n        totE += simE;\n        totU += simU;\n\n        r.querySelector('.col-entrate').textContent = '€ ' + simE.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });\n        r.querySelector('.col-uscite').textContent = '€ ' + simU.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });\n        \n        var saldoEl = r.querySelector('.col-saldo');\n        saldoEl.textContent = (saldo >= 0 ? '+' : '') + '€ ' + saldo.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });\n        saldoEl.className = 'fw-bold col-saldo ' + (saldo >= 0 ? 'text-success' : 'text-danger');\n\n        var progEl = r.querySelector('.col-progressivo');\n        progEl.textContent = '€ ' + prog.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });\n        progEl.className = 'col-progressivo ' + (prog >= 0 ? 'text-primary' : 'text-danger');\n    });\n\n    var saldoFinale = totE - totU;\n    var tasso = totU > 0 ? Math.round((totE / totU) * 100) : 100;\n\n    // Aggiorna KPI\n    document.getElementById('kpiEntrate').textContent = totE.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });\n    document.getElementById('kpiUscite').textContent = totU.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });\n    document.getElementById('kpiSaldoVal').textContent = saldoFinale.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });\n    document.getElementById('kpiCopertura').textContent = tasso;\n\n    var saldoText = document.getElementById('kpiSaldoText');\n    var saldoBadge = document.getElementById('kpiSaldoBadge');\n    var saldoIconBox = document.getElementById('kpiSaldoIconBox');\n    var saldoIcon = document.getElementById('kpiSaldoIcon');\n\n    if (saldoFinale >= 0) {\n        saldoText.className = 'fw-bold mb-0 text-success';\n        saldoBadge.className = 'badge bg-success-subtle text-success';\n        saldoBadge.textContent = 'Attivo di Cassa';\n        saldoIconBox.className = 'p-3 rounded-4 me-3 bg-success-subtle text-success';\n        saldoIcon.className = 'bi bi-shield-check fs-3';\n    } else {\n        saldoText.className = 'fw-bold mb-0 text-danger';\n        saldoBadge.className = 'badge bg-danger-subtle text-danger';\n        saldoBadge.textContent = 'Disavanzo Previsto';\n        saldoIconBox.className = 'p-3 rounded-4 me-3 bg-danger-subtle text-danger';\n        saldoIcon.className = 'bi bi-exclamation-diamond fs-3';\n    }\n\n    // Aggiorna Footer Tabella\n    document.getElementById('footEntrate').textContent = '€ ' + totE.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });\n    document.getElementById('footUscite').textContent = '€ ' + totU.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });\n    \n    var footSaldo = document.getElementById('footSaldo');\n    footSaldo.textContent = (saldoFinale >= 0 ? '+' : '') + '€ ' + saldoFinale.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });\n    footSaldo.className = (saldoFinale >= 0 ? 'text-success' : 'text-danger');\n\n    var footProg = document.getElementById('footProgressivo');\n    footProg.textContent = '€ ' + saldoFinale.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });\n    footProg.className = (saldoFinale >= 0 ? 'text-primary' : 'text-danger');\n}\n</script>\n\n<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>\n"
   },
   {
-    path: 'private/pages/tesserati.php',
-    filename: 'tesserati.php',
-    folder: 'private/pages',
-    language: 'php',
-    description: 'Gestione tesserati sportivi per anno, tipi di tesseramento, certificati medici e scadenze',
-    content: `<?php
-/**
- * Gestione Tesserati per Anno Sportivo
- * Posizione: /private/pages/tesserati.php
- */
-require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';
-$db = getDbConnection();
-
-$search = trim($_GET['search'] ?? '');
-$tipo = $_GET['tipo'] ?? '';
-$stato = $_GET['stato'] ?? '';
-
-$sql = "SELECT t.*, p.nome, p.cognome, p.codice_fiscale, p.is_minorenne, p.tutore_nome, p.tutore_cognome, a.anno
-        FROM tesserati t
-        INNER JOIN persone p ON t.persona_id = p.id
-        INNER JOIN anno a ON t.anno_id = a.id
-        WHERE 1=1";
-$params = [];
-
-if ($search !== '') {
-    $sql .= " AND (p.nome LIKE ? OR p.cognome LIKE ? OR t.numero_tessera LIKE ? OR p.codice_fiscale LIKE ?)";
-    $params[] = "%$search%";
-    $params[] = "%$search%";
-    $params[] = "%$search%";
-    $params[] = "%$search%";
-}
-
-if ($tipo !== '') {
-    $sql .= " AND t.tipo_tesseramento = ?";
-    $params[] = $tipo;
-}
-
-if ($stato !== '') {
-    $sql .= " AND t.stato = ?";
-    $params[] = $stato;
-}
-
-$sql .= " ORDER BY t.data_tesseramento DESC";
-$stmt = $db->prepare($sql);
-$stmt->execute($params);
-$tesserati = $stmt->fetchAll();
-?>
-
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h2 class="h3 fw-bold mb-0"><i class="bi bi-card-checklist me-2 text-primary"></i>Registro Tesserati Sportivi</h2>
-        <p class="text-muted small mb-0">Gestione soci tesserati, numeri di tessera e certificati medici</p>
-    </div>
-</div>
-
-<!-- Filtri -->
-<div class="card border-0 shadow-sm mb-3">
-    <div class="card-body py-2">
-        <form method="GET" class="row g-2 align-items-center">
-            <input type="hidden" name="page" value="tesserati">
-            <div class="col-md-5">
-                <input type="text" name="search" class="form-control form-control-sm" placeholder="Cerca Atleta, Tessera o Codice Fiscale..." value="<?= htmlspecialchars($search) ?>">
-            </div>
-            <div class="col-md-3">
-                <select name="tipo" class="form-select form-select-sm">
-                    <option value="">Tutti i Tipi Tesseramento</option>
-                    <option value="Agonista" <?= $tipo==='Agonista'?'selected':'' ?>>Agonista</option>
-                    <option value="Non Agonista" <?= $tipo==='Non Agonista'?'selected':'' ?>>Non Agonista</option>
-                    <option value="Promozionale" <?= $tipo==='Promozionale'?'selected':'' ?>>Promozionale</option>
-                    <option value="Socio / Dirigente" <?= $tipo==='Socio / Dirigente'?'selected':'' ?>>Socio / Dirigente</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <select name="stato" class="form-select form-select-sm">
-                    <option value="">Tutti gli Stati</option>
-                    <option value="Attivo" <?= $stato==='Attivo'?'selected':'' ?>>Attivo</option>
-                    <option value="Sospeso" <?= $stato==='Sospeso'?'selected':'' ?>>Sospeso</option>
-                    <option value="Scaduto" <?= $stato==='Scaduto'?'selected':'' ?>>Scaduto</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-sm btn-secondary w-100"><i class="bi bi-filter me-1"></i> Filtra</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<div class="table-responsive bg-white rounded shadow-sm">
-    <table class="table table-hover align-middle mb-0">
-        <thead class="table-light">
-            <tr>
-                <th>N° Tessera</th>
-                <th>Atleta</th>
-                <th>Anno</th>
-                <th>Data Tesseramento</th>
-                <th>Tipo</th>
-                <th>Certificato Medico</th>
-                <th>Stato</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php if (empty($tesserati)): ?>
-                <tr><td colspan="7" class="text-center py-4 text-muted">Nessun tesserato trovato.</td></tr>
-            <?php else: foreach ($tesserati as $t): ?>
-                <tr>
-                    <td><code><?= htmlspecialchars($t['numero_tessera']) ?></code></td>
-                    <td>
-                        <strong><?= htmlspecialchars($t['cognome'] . ' ' . $t['nome']) ?></strong>
-                        <?php if ($t['is_minorenne']): ?>
-                            <span class="badge bg-warning text-dark ms-1">Minorenne</span>
-                        <?php endif; ?>
-                    </td>
-                    <td><span class="badge bg-light text-dark"><?= htmlspecialchars($t['anno']) ?></span></td>
-                    <td><?= date('d/m/Y', strtotime($t['data_tesseramento'])) ?></td>
-                    <td><span class="badge bg-primary-subtle text-primary"><?= htmlspecialchars($t['tipo_tesseramento']) ?></span></td>
-                    <td>
-                        <?php if (!empty($t['certificato_medico_scadenza'])): 
-                            $isScadutoMed = strtotime($t['certificato_medico_scadenza']) < time();
-                        ?>
-                            <span class="<?= $isScadutoMed ? 'text-danger fw-bold' : 'text-success' ?>">
-                                <?= date('d/m/Y', strtotime($t['certificato_medico_scadenza'])) ?>
-                                <?= $isScadutoMed ? '<i class="bi bi-exclamation-circle ms-1"></i>' : '' ?>
-                            </span>
-                        <?php else: ?>
-                            <span class="text-muted">Non inserito</span>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <span class="badge bg-<?= $t['stato']==='Attivo'?'success':($t['stato']==='Sospeso'?'warning text-dark':'secondary') ?>">
-                            <?= htmlspecialchars($t['stato']) ?>
-                        </span>
-                    </td>
-                </tr>
-            <?php endforeach; endif; ?>
-        </tbody>
-    </table>
-</div>
-
-<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>
-`
+    "path": "private/pages/pagamenti.php",
+    "filename": "pagamenti.php",
+    "folder": "private/pages",
+    "language": "php",
+    "description": "Registro incassi con ricevute numerate e metodi di pagamento",
+    "content": "<?php\n/**\n * Registro Incassi & Pagamenti\n * Posizione: /private/pages/pagamenti.php\n */\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';\n$db = getDbConnection();\n\n$search = trim($_GET['search'] ?? '');\n$metodo = trim($_GET['metodo'] ?? '');\n\n$sql = \"SELECT p.*, per.nome, per.cognome, t.numero_tessera\n        FROM pagamenti p\n        INNER JOIN tesserati t ON p.tesserato_id = t.id\n        INNER JOIN persone per ON t.persona_id = per.id\n        WHERE 1=1\";\n$params = [];\n\nif ($search !== '') {\n    $sql .= \" AND (per.nome LIKE ? OR per.cognome LIKE ? OR p.ricevuta_numero LIKE ? OR p.causale LIKE ?)\";\n    $params[] = \"%$search%\";\n    $params[] = \"%$search%\";\n    $params[] = \"%$search%\";\n    $params[] = \"%$search%\";\n}\nif ($metodo !== '') {\n    $sql .= \" AND p.metodo_pagamento = ?\";\n    $params[] = $metodo;\n}\n\n$sql .= \" ORDER BY p.data_pagamento DESC\";\n$stmt = $db->prepare($sql);\n$stmt->execute($params);\n$pagamenti = $stmt->fetchAll();\n?>\n\n<div class=\"d-flex justify-content-between align-items-center mb-3\">\n    <div>\n        <h2 class=\"h3 fw-bold mb-0\"><i class=\"bi bi-wallet2 me-2 text-success\"></i>Registro Incassi & Pagamenti</h2>\n        <p class=\"text-muted small mb-0\">Elenco delle quietanze e ricevute emesse per quote e corsi</p>\n    </div>\n</div>\n\n<!-- Filtri -->\n<div class=\"card border-0 shadow-sm mb-3\">\n    <div class=\"card-body py-2\">\n        <form method=\"GET\" class=\"row g-2 align-items-center\">\n            <input type=\"hidden\" name=\"page\" value=\"pagamenti\">\n            <div class=\"col-md-6\">\n                <input type=\"text\" name=\"search\" class=\"form-control form-control-sm\" placeholder=\"Cerca Atleta, Ricevuta o Causale...\" value=\"<?= htmlspecialchars($search) ?>\">\n            </div>\n            <div class=\"col-md-3\">\n                <select name=\"metodo\" class=\"form-select form-select-sm\">\n                    <option value=\"\">Tutti i Metodi di Pagamento</option>\n                    <option value=\"contanti\" <?= $metodo==='contanti'?'selected':'' ?>>Contanti</option>\n                    <option value=\"pos\" <?= $metodo==='pos'?'selected':'' ?>>POS / Carta</option>\n                    <option value=\"bonifico\" <?= $metodo==='bonifico'?'selected':'' ?>>Bonifico Bancario</option>\n                    <option value=\"satispay\" <?= $metodo==='satispay'?'selected':'' ?>>Satispay</option>\n                </select>\n            </div>\n            <div class=\"col-md-3\">\n                <button type=\"submit\" class=\"btn btn-sm btn-secondary w-100\"><i class=\"bi bi-filter me-1\"></i> Filtra</button>\n            </div>\n        </form>\n    </div>\n</div>\n\n<div class=\"table-responsive bg-white rounded shadow-sm\">\n    <table class=\"table table-hover align-middle mb-0\">\n        <thead class=\"table-light\">\n            <tr>\n                <th>N° Ricevuta</th>\n                <th>Data Incasso</th>\n                <th>Atleta</th>\n                <th>Causale</th>\n                <th>Metodo</th>\n                <th class=\"text-end\">Importo</th>\n            </tr>\n        </thead>\n        <tbody>\n            <?php if (empty($pagamenti)): ?>\n                <tr><td colspan=\"6\" class=\"text-center py-4 text-muted\">Nessun pagamento registrato con i filtri selezionati.</td></tr>\n            <?php else: foreach ($pagamenti as $p): ?>\n                <tr>\n                    <td><code><?= htmlspecialchars($p['ricevuta_numero']) ?></code></td>\n                    <td><?= date('d/m/Y H:i', strtotime($p['data_pagamento'])) ?></td>\n                    <td><strong><?= htmlspecialchars($p['cognome'] . ' ' . $p['nome']) ?></strong></td>\n                    <td><?= htmlspecialchars($p['causale']) ?></td>\n                    <td>\n                        <span class=\"badge bg-secondary-subtle text-secondary\">\n                            <?= ucfirst($p['metodo_pagamento']) ?>\n                        </span>\n                    </td>\n                    <td class=\"text-end fw-bold text-success fs-6\">€ <?= number_format($p['importo'], 2, ',', '.') ?></td>\n                </tr>\n            <?php endforeach; endif; ?>\n        </tbody>\n    </table>\n</div>\n\n<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>\n"
   },
   {
-    path: 'private/pages/gruppi.php',
-    filename: 'gruppi.php',
-    folder: 'private/pages',
-    language: 'php',
-    description: 'Gestione Corsi & Gruppi con parametrizzazione quote e scadenze mensili',
-    content: `<?php
-/**
- * Gestione Gruppi & Corsi Sportivi
- * Posizione: /private/pages/gruppi.php
- */
-require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';
-$db = getDbConnection();
-
-$gruppi = $db->query("
-    SELECT g.*, a.anno,
-           (SELECT COUNT(*) FROM gruppi_tesserati gt WHERE gt.gruppo_id = g.id) AS num_iscritti
-    FROM gruppi g
-    INNER JOIN anno a ON g.anno_id = a.id
-    ORDER BY g.nome_gruppo ASC
-")->fetchAll();
-?>
-
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h2 class="h3 fw-bold mb-0"><i class="bi bi-diagram-3 me-2 text-primary"></i>Gruppi & Corsi Sportivi</h2>
-        <p class="text-muted small mb-0">Configurazione quote mensili, giorni di scadenza e periodi di attività</p>
-    </div>
-</div>
-
-<div class="table-responsive bg-white rounded shadow-sm">
-    <table class="table table-hover align-middle mb-0">
-        <thead class="table-light">
-            <tr>
-                <th>Nome Gruppo / Corso</th>
-                <th>Anno Sportivo</th>
-                <th>Istruttore</th>
-                <th>Quota Mensile</th>
-                <th>Giorno Scadenza</th>
-                <th>Periodo Attività</th>
-                <th>Iscritti</th>
-                <th class="text-end">Azioni</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php if (empty($gruppi)): ?>
-                <tr><td colspan="8" class="text-center py-4 text-muted">Nessun gruppo configurato.</td></tr>
-            <?php else: foreach ($gruppi as $g): ?>
-                <tr>
-                    <td>
-                        <strong class="text-primary"><?= htmlspecialchars($g['nome_gruppo']) ?></strong>
-                        <?php if (!empty($g['categoria'])): ?>
-                            <div class="small text-muted"><?= htmlspecialchars($g['categoria']) ?></div>
-                        <?php endif; ?>
-                    </td>
-                    <td><span class="badge bg-light text-dark"><?= htmlspecialchars($g['anno']) ?></span></td>
-                    <td><?= htmlspecialchars($g['istruttore'] ?? '-') ?></td>
-                    <td><strong class="text-success fs-6">€ <?= number_format($g['quota_mensile'], 2, ',', '.') ?></strong></td>
-                    <td>Il <?= $g['giorno_scadenza_mensile'] ?> del mese</td>
-                    <td>
-                        <small>
-                            Dal <?= date('d/m/Y', strtotime($g['data_inizio'])) ?><br>
-                            Al <?= date('d/m/Y', strtotime($g['data_fine'])) ?>
-                        </small>
-                    </td>
-                    <td><span class="badge bg-primary-subtle text-primary"><?= $g['num_iscritti'] ?> atleti</span></td>
-                    <td class="text-end">
-                        <a href="index.php?page=quote&gruppo_id=<?= $g['id'] ?>" class="btn btn-sm btn-outline-secondary">
-                            <i class="bi bi-eye me-1"></i> Quote
-                        </a>
-                    </td>
-                </tr>
-            <?php endforeach; endif; ?>
-        </tbody>
-    </table>
-</div>
-
-<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>
-`
+    "path": "private/pages/anni.php",
+    "filename": "anni.php",
+    "folder": "private/pages",
+    "language": "php",
+    "description": "Configurazione stagioni sportive e anno attivo",
+    "content": "<?php\n/**\n * Gestione Anni e Stagioni Sportive\n * Posizione: /private/pages/anni.php\n */\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';\n$db = getDbConnection();\n\n$anni = $db->query(\"SELECT * FROM anno ORDER BY data_inizio DESC\")->fetchAll();\n?>\n\n<div class=\"d-flex justify-content-between align-items-center mb-3\">\n    <div>\n        <h2 class=\"h3 fw-bold mb-0\"><i class=\"bi bi-calendar3 me-2 text-primary\"></i>Stagioni Sportive</h2>\n        <p class=\"text-muted small mb-0\">Configurazione anni accademici e periodi stagionali</p>\n    </div>\n</div>\n\n<div class=\"table-responsive bg-white rounded shadow-sm\">\n    <table class=\"table table-hover align-middle mb-0\">\n        <thead class=\"table-light\">\n            <tr>\n                <th>Anno Sportivo</th>\n                <th>Data Inizio</th>\n                <th>Data Fine</th>\n                <th>Stato</th>\n            </tr>\n        </thead>\n        <tbody>\n            <?php foreach ($anni as $a): ?>\n                <tr>\n                    <td><strong class=\"fs-6\"><?= htmlspecialchars($a['anno']) ?></strong></td>\n                    <td><?= date('d/m/Y', strtotime($a['data_inizio'])) ?></td>\n                    <td><?= date('d/m/Y', strtotime($a['data_fine'])) ?></td>\n                    <td>\n                        <?php if ($a['attivo']): ?>\n                            <span class=\"badge bg-success\"><i class=\"bi bi-check-circle me-1\"></i>Anno Corrente Attivo</span>\n                        <?php else: ?>\n                            <span class=\"badge bg-secondary\">Archiviato</span>\n                        <?php endif; ?>\n                    </td>\n                </tr>\n            <?php endforeach; ?>\n        </tbody>\n    </table>\n</div>\n\n<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>\n"
   },
   {
-    path: 'private/pages/quote.php',
-    filename: 'quote.php',
-    folder: 'private/pages',
-    language: 'php',
-    description: 'Scadenziario quote con filtri per mese di riferimento, stato e atleti',
-    content: `<?php
-/**
- * Scadenziario Quote Mensili
- * Posizione: /private/pages/quote.php
- */
-require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';
-$db = getDbConnection();
-
-$search = trim($_GET['search'] ?? '');
-$mese = trim($_GET['mese'] ?? '');
-$stato = trim($_GET['stato'] ?? '');
-
-$sql = "SELECT q.*, p.nome, p.cognome, t.numero_tessera, g.nome_gruppo
-        FROM quote q
-        INNER JOIN tesserati t ON q.tesserato_id = t.id
-        INNER JOIN persone p ON t.persona_id = p.id
-        LEFT JOIN gruppi g ON q.gruppo_id = g.id
-        WHERE 1=1";
-$params = [];
-
-if ($search !== '') {
-    $sql .= " AND (p.nome LIKE ? OR p.cognome LIKE ? OR q.causale LIKE ?)";
-    $params[] = "%$search%";
-    $params[] = "%$search%";
-    $params[] = "%$search%";
-}
-if ($mese !== '') {
-    $sql .= " AND q.mese_riferimento = ?";
-    $params[] = $mese;
-}
-if ($stato !== '') {
-    $sql .= " AND q.stato = ?";
-    $params[] = $stato;
-}
-
-$sql .= " ORDER BY q.data_scadenza DESC";
-$stmt = $db->prepare($sql);
-$stmt->execute($params);
-$quote = $stmt->fetchAll();
-
-// Mesi unici per filtro
-$mesiDisponibili = $db->query("SELECT DISTINCT mese_riferimento FROM quote WHERE mese_riferimento IS NOT NULL ORDER BY mese_riferimento DESC")->fetchAll(PDO::FETCH_COLUMN);
-?>
-
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <div>
-        <h2 class="h3 fw-bold mb-0"><i class="bi bi-cash-stack me-2 text-primary"></i>Scadenziario Quote Mensili</h2>
-        <p class="text-muted small mb-0">Controllo pagamenti, quote emesse e stati di riscossione</p>
-    </div>
-    <a href="index.php?page=quote_scadute" class="btn btn-outline-danger btn-sm fw-bold">
-        <i class="bi bi-exclamation-triangle me-1"></i> Solo Quote Scadute
-    </a>
-</div>
-
-<!-- Filtri -->
-<div class="card border-0 shadow-sm mb-3">
-    <div class="card-body py-2">
-        <form method="GET" class="row g-2 align-items-center">
-            <input type="hidden" name="page" value="quote">
-            <div class="col-md-4">
-                <input type="text" name="search" class="form-control form-control-sm" placeholder="Cerca Atleta o Causale..." value="<?= htmlspecialchars($search) ?>">
-            </div>
-            <div class="col-md-3">
-                <select name="mese" class="form-select form-select-sm">
-                    <option value="">Tutti i Mesi</option>
-                    <?php foreach ($mesiDisponibili as $m): ?>
-                        <option value="<?= $m ?>" <?= $mese===$m?'selected':'' ?>><?= $m ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <select name="stato" class="form-select form-select-sm">
-                    <option value="">Tutti gli Stati</option>
-                    <option value="da_pagare" <?= $stato==='da_pagare'?'selected':'' ?>>Da Pagare</option>
-                    <option value="parziale" <?= $stato==='parziale'?'selected':'' ?>>Parziale</option>
-                    <option value="pagata" <?= $stato==='pagata'?'selected':'' ?>>Pagata</option>
-                    <option value="annullata" <?= $stato==='annullata'?'selected':'' ?>>Annullata</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-sm btn-secondary w-100"><i class="bi bi-filter me-1"></i> Filtra</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<div class="table-responsive bg-white rounded shadow-sm">
-    <table class="table table-hover align-middle mb-0">
-        <thead class="table-light">
-            <tr>
-                <th>Scadenza</th>
-                <th>Mese Rif.</th>
-                <th>Atleta</th>
-                <th>Gruppo / Corso</th>
-                <th>Causale</th>
-                <th>Importo</th>
-                <th>Incassato</th>
-                <th>Stato</th>
-                <th class="text-end">Azione</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php if (empty($quote)): ?>
-                <tr><td colspan="9" class="text-center py-4 text-muted">Nessuna quota trovata.</td></tr>
-            <?php else: foreach ($quote as $q): 
-                $isScaduta = ($q['data_scadenza'] < date('Y-m-d')) && ($q['stato'] !== 'pagata' && $q['stato'] !== 'annullata');
-            ?>
-                <tr>
-                    <td>
-                        <span class="<?= $isScaduta ? 'text-danger fw-bold' : '' ?>">
-                            <?= date('d/m/Y', strtotime($q['data_scadenza'])) ?>
-                        </span>
-                    </td>
-                    <td><code><?= htmlspecialchars($q['mese_riferimento'] ?? '-') ?></code></td>
-                    <td><strong><?= htmlspecialchars($q['cognome'] . ' ' . $q['nome']) ?></strong></td>
-                    <td><?= htmlspecialchars($q['nome_gruppo'] ?? 'Generale') ?></td>
-                    <td><?= htmlspecialchars($q['causale']) ?></td>
-                    <td><strong>€ <?= number_format($q['importo'], 2, ',', '.') ?></strong></td>
-                    <td><span class="text-success">€ <?= number_format($q['importo_pagato'], 2, ',', '.') ?></span></td>
-                    <td>
-                        <?php if ($q['stato'] === 'pagata'): ?>
-                            <span class="badge bg-success">Pagata</span>
-                        <?php elseif ($isScaduta): ?>
-                            <span class="badge bg-danger">Scaduta</span>
-                        <?php elseif ($q['stato'] === 'parziale'): ?>
-                            <span class="badge bg-warning text-dark">Parziale</span>
-                        <?php else: ?>
-                            <span class="badge bg-secondary">Da Pagare</span>
-                        <?php endif; ?>
-                    </td>
-                    <td class="text-end">
-                        <?php if ($q['stato'] !== 'pagata'): ?>
-                            <a href="index.php?page=pagamenti&paga_quota=<?= $q['id'] ?>" class="btn btn-sm btn-success">
-                                <i class="bi bi-cash me-1"></i> Incassa
-                            </a>
-                        <?php else: ?>
-                            <span class="text-muted small"><i class="bi bi-check2-circle text-success"></i> Saldata</span>
-                        <?php endif; ?>
-                    </td>
-                </tr>
-            <?php endforeach; endif; ?>
-        </tbody>
-    </table>
-</div>
-
-<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>
-`
+    "path": "private/pages/utenti.php",
+    "filename": "utenti.php",
+    "folder": "private/pages",
+    "language": "php",
+    "description": "Gestione operatori segreteria e utenti kiosk",
+    "content": "<?php\n/**\n * Gestione Utenti e Operatori\n * Posizione: /private/pages/utenti.php\n */\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';\n$db = getDbConnection();\n\n$utenti = $db->query(\"SELECT id, username, nome, ruolo, is_kiosk, attivo, created_at FROM utenti ORDER BY id ASC\")->fetchAll();\n?>\n\n<div class=\"d-flex justify-content-between align-items-center mb-3\">\n    <div>\n        <h2 class=\"h3 fw-bold mb-0\"><i class=\"bi bi-person-badge me-2 text-primary\"></i>Gestione Utenti & Postazioni</h2>\n        <p class=\"text-muted small mb-0\">Profili operatore, amministratori e configurazione postazioni Kiosk reception</p>\n    </div>\n</div>\n\n<div class=\"table-responsive bg-white rounded shadow-sm\">\n    <table class=\"table table-hover align-middle mb-0\">\n        <thead class=\"table-light\">\n            <tr>\n                <th>Nome Utente</th>\n                <th>Nome Completo</th>\n                <th>Ruolo</th>\n                <th>Modalità Kiosk</th>\n                <th>Stato</th>\n            </tr>\n        </thead>\n        <tbody>\n            <?php foreach ($utenti as $u): ?>\n                <tr>\n                    <td><code><?= htmlspecialchars($u['username']) ?></code></td>\n                    <td><strong><?= htmlspecialchars($u['nome']) ?></strong></td>\n                    <td><span class=\"badge bg-primary-subtle text-primary\"><?= ucfirst($u['ruolo']) ?></span></td>\n                    <td>\n                        <?php if ($u['is_kiosk']): ?>\n                            <span class=\"badge bg-warning text-dark\"><i class=\"bi bi-tablet-landscape me-1\"></i>Kiosk Attivo</span>\n                        <?php else: ?>\n                            <span class=\"badge bg-light text-muted border\">Gestionale Web</span>\n                        <?php endif; ?>\n                    </td>\n                    <td>\n                        <span class=\"badge bg-<?= $u['attivo'] ? 'success' : 'danger' ?>\">\n                            <?= $u['attivo'] ? 'Attivo' : 'Disattivato' ?>\n                        </span>\n                    </td>\n                </tr>\n            <?php endforeach; ?>\n        </tbody>\n    </table>\n</div>\n\n<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>\n"
   },
   {
-    path: 'private/pages/pagamenti.php',
-    filename: 'pagamenti.php',
-    folder: 'private/pages',
-    language: 'php',
-    description: 'Registro incassi, ricevute di pagamento e quietanze con filtri e modalità di pagamento',
-    content: `<?php
-/**
- * Registro Incassi & Pagamenti
- * Posizione: /private/pages/pagamenti.php
- */
-require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';
-$db = getDbConnection();
-
-$search = trim($_GET['search'] ?? '');
-$metodo = trim($_GET['metodo'] ?? '');
-
-$sql = "SELECT p.*, per.nome, per.cognome, t.numero_tessera
-        FROM pagamenti p
-        INNER JOIN tesserati t ON p.tesserato_id = t.id
-        INNER JOIN persone per ON t.persona_id = per.id
-        WHERE 1=1";
-$params = [];
-
-if ($search !== '') {
-    $sql .= " AND (per.nome LIKE ? OR per.cognome LIKE ? OR p.ricevuta_numero LIKE ? OR p.causale LIKE ?)";
-    $params[] = "%$search%";
-    $params[] = "%$search%";
-    $params[] = "%$search%";
-    $params[] = "%$search%";
-}
-if ($metodo !== '') {
-    $sql .= " AND p.metodo_pagamento = ?";
-    $params[] = $metodo;
-}
-
-$sql .= " ORDER BY p.data_pagamento DESC";
-$stmt = $db->prepare($sql);
-$stmt->execute($params);
-$pagamenti = $stmt->fetchAll();
-?>
-
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h2 class="h3 fw-bold mb-0"><i class="bi bi-wallet2 me-2 text-success"></i>Registro Incassi & Pagamenti</h2>
-        <p class="text-muted small mb-0">Elenco delle quietanze e ricevute emesse per quote e corsi</p>
-    </div>
-</div>
-
-<!-- Filtri -->
-<div class="card border-0 shadow-sm mb-3">
-    <div class="card-body py-2">
-        <form method="GET" class="row g-2 align-items-center">
-            <input type="hidden" name="page" value="pagamenti">
-            <div class="col-md-6">
-                <input type="text" name="search" class="form-control form-control-sm" placeholder="Cerca Atleta, Ricevuta o Causale..." value="<?= htmlspecialchars($search) ?>">
-            </div>
-            <div class="col-md-3">
-                <select name="metodo" class="form-select form-select-sm">
-                    <option value="">Tutti i Metodi di Pagamento</option>
-                    <option value="contanti" <?= $metodo==='contanti'?'selected':'' ?>>Contanti</option>
-                    <option value="pos" <?= $metodo==='pos'?'selected':'' ?>>POS / Carta</option>
-                    <option value="bonifico" <?= $metodo==='bonifico'?'selected':'' ?>>Bonifico Bancario</option>
-                    <option value="satispay" <?= $metodo==='satispay'?'selected':'' ?>>Satispay</option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <button type="submit" class="btn btn-sm btn-secondary w-100"><i class="bi bi-filter me-1"></i> Filtra</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<div class="table-responsive bg-white rounded shadow-sm">
-    <table class="table table-hover align-middle mb-0">
-        <thead class="table-light">
-            <tr>
-                <th>N° Ricevuta</th>
-                <th>Data Incasso</th>
-                <th>Atleta</th>
-                <th>Causale</th>
-                <th>Metodo</th>
-                <th class="text-end">Importo</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php if (empty($pagamenti)): ?>
-                <tr><td colspan="6" class="text-center py-4 text-muted">Nessun pagamento registrato con i filtri selezionati.</td></tr>
-            <?php else: foreach ($pagamenti as $p): ?>
-                <tr>
-                    <td><code><?= htmlspecialchars($p['ricevuta_numero']) ?></code></td>
-                    <td><?= date('d/m/Y H:i', strtotime($p['data_pagamento'])) ?></td>
-                    <td><strong><?= htmlspecialchars($p['cognome'] . ' ' . $p['nome']) ?></strong></td>
-                    <td><?= htmlspecialchars($p['causale']) ?></td>
-                    <td>
-                        <span class="badge bg-secondary-subtle text-secondary">
-                            <?= ucfirst($p['metodo_pagamento']) ?>
-                        </span>
-                    </td>
-                    <td class="text-end fw-bold text-success fs-6">€ <?= number_format($p['importo'], 2, ',', '.') ?></td>
-                </tr>
-            <?php endforeach; endif; ?>
-        </tbody>
-    </table>
-</div>
-
-<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>
-`
+    "path": "private/pages/associazione.php",
+    "filename": "associazione.php",
+    "folder": "private/pages",
+    "language": "php",
+    "description": "Anagrafica fiscale associazione sportiva, sede legale ed enti EPS/FSN",
+    "content": "<?php\n/**\n * Dati Associazione Sportiva, Sede Legale & Affiliazioni\n * Posizione: /private/pages/associazione.php\n */\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';\n$db = getDbConnection();\n\n$stmt = $db->query(\"SELECT * FROM associazione WHERE id = 1 LIMIT 1\");\n$ass = $stmt->fetch() ?: [\n    'denominazione' => 'A.S.D. Polisportiva Aurora',\n    'codice_fiscale' => '97854120584',\n    'partita_iva' => '04859620581',\n    'indirizzo' => 'Via dello Sport, 24',\n    'cap' => '00153',\n    'comune' => 'Roma',\n    'provincia' => 'RM',\n    'legale_rappresentante' => 'Alessandro Bianchi',\n    'telefono' => '06 5894123',\n    'email' => 'segreteria@polisportivaurora.it',\n    'pec' => 'polisportivaurora@pec.it',\n    'codice_affiliazione' => 'FISR / CONI n. 3942',\n    'iban' => 'IT60X0542811101000000123456'\n];\n?>\n\n<div class=\"d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2\">\n    <div>\n        <h2 class=\"h3 fw-bold mb-1 d-flex align-items-center\">\n            <i class=\"bi bi-building-gear text-primary me-2\"></i> Dati Associazione Sportiva & Federazioni\n        </h2>\n        <p class=\"text-muted small mb-0\">\n            Configurazione ragione sociale, recapiti fiscali, registri sportivi RASD e intestazione documenti\n        </p>\n    </div>\n</div>\n\n<div class=\"card border-0 shadow-sm rounded-4 bg-white mb-4\">\n    <div class=\"card-header bg-white border-bottom py-3 px-4\">\n        <h5 class=\"fw-bold mb-0 text-dark\"><i class=\"bi bi-card-heading me-2 text-primary\"></i>Anagrafica Fiscale e Sede Legale</h5>\n        <small class=\"text-muted\">Questi dati vengono utilizzati nelle ricevute di pagamento, nei moduli di tesseramento e nei prospetti di bilancio</small>\n    </div>\n    <form method=\"POST\" action=\"index.php?action=salva_associazione\">\n        <div class=\"card-body p-4\">\n            <div class=\"row g-3\">\n                <div class=\"col-md-8\">\n                    <label class=\"form-label fw-bold\">Denominazione Ufficiale A.S.D. / S.S.D. <span class=\"text-danger\">*</span></label>\n                    <input type=\"text\" name=\"denominazione\" class=\"form-control\" value=\"<?= htmlspecialchars($ass['denominazione']) ?>\" required>\n                </div>\n                <div class=\"col-md-4\">\n                    <label class=\"form-label fw-bold\">Codice Fiscale Ente <span class=\"text-danger\">*</span></label>\n                    <input type=\"text\" name=\"codice_fiscale\" class=\"form-control\" value=\"<?= htmlspecialchars($ass['codice_fiscale']) ?>\" required>\n                </div>\n\n                <div class=\"col-md-4\">\n                    <label class=\"form-label fw-bold\">Partita IVA (se presente)</label>\n                    <input type=\"text\" name=\"partita_iva\" class=\"form-control\" value=\"<?= htmlspecialchars($ass['partita_iva'] ?? '') ?>\" placeholder=\"es. 04859620581\">\n                </div>\n                <div class=\"col-md-8\">\n                    <label class=\"form-label fw-bold\">Presidente / Legale Rappresentante <span class=\"text-danger\">*</span></label>\n                    <input type=\"text\" name=\"legale_rappresentante\" class=\"form-control\" value=\"<?= htmlspecialchars($ass['legale_rappresentante']) ?>\" required>\n                </div>\n\n                <div class=\"col-md-6\">\n                    <label class=\"form-label fw-bold\">Indirizzo Sede Legale <span class=\"text-danger\">*</span></label>\n                    <input type=\"text\" name=\"indirizzo\" class=\"form-control\" value=\"<?= htmlspecialchars($ass['indirizzo']) ?>\" required>\n                </div>\n                <div class=\"col-md-2\">\n                    <label class=\"form-label fw-bold\">CAP <span class=\"text-danger\">*</span></label>\n                    <input type=\"text\" name=\"cap\" class=\"form-control\" value=\"<?= htmlspecialchars($ass['cap']) ?>\" required>\n                </div>\n                <div class=\"col-md-3\">\n                    <label class=\"form-label fw-bold\">Comune Sede <span class=\"text-danger\">*</span></label>\n                    <input type=\"text\" name=\"comune\" class=\"form-control\" value=\"<?= htmlspecialchars($ass['comune']) ?>\" required>\n                </div>\n                <div class=\"col-md-1\">\n                    <label class=\"form-label fw-bold\">Prov. <span class=\"text-danger\">*</span></label>\n                    <input type=\"text\" name=\"provincia\" class=\"form-control\" value=\"<?= htmlspecialchars($ass['provincia']) ?>\" required maxlength=\"4\">\n                </div>\n\n                <div class=\"col-md-4\">\n                    <label class=\"form-label fw-bold\">Telefono Segreteria</label>\n                    <input type=\"text\" name=\"telefono\" class=\"form-control\" value=\"<?= htmlspecialchars($ass['telefono'] ?? '') ?>\" placeholder=\"es. 06 1234567\">\n                </div>\n                <div class=\"col-md-4\">\n                    <label class=\"form-label fw-bold\">Email Segreteria</label>\n                    <input type=\"email\" name=\"email\" class=\"form-control\" value=\"<?= htmlspecialchars($ass['email'] ?? '') ?>\" placeholder=\"es. segreteria@societa.it\">\n                </div>\n                <div class=\"col-md-4\">\n                    <label class=\"form-label fw-bold\">Posta Elettronica Certificata (PEC)</label>\n                    <input type=\"email\" name=\"pec\" class=\"form-control\" value=\"<?= htmlspecialchars($ass['pec'] ?? '') ?>\" placeholder=\"es. societa@pec.it\">\n                </div>\n\n                <div class=\"col-md-6\">\n                    <label class=\"form-label fw-bold\">Codice Affiliazione Federale / CONI</label>\n                    <input type=\"text\" name=\"codice_affiliazione\" class=\"form-control\" value=\"<?= htmlspecialchars($ass['codice_affiliazione'] ?? '') ?>\" placeholder=\"es. FISR n. 3942 / CSEN n. 45892\">\n                </div>\n                <div class=\"col-md-6\">\n                    <label class=\"form-label fw-bold\">Codice IBAN per Bonifici Quote Sociali</label>\n                    <input type=\"text\" name=\"iban\" class=\"form-control font-monospace\" value=\"<?= htmlspecialchars($ass['iban'] ?? '') ?>\" placeholder=\"IT60X0542811101000000123456\">\n                </div>\n            </div>\n\n            <!-- Box informativo Enti Affiliati -->\n            <div class=\"mt-4 pt-3 border-top\">\n                <h6 class=\"fw-bold mb-2 text-dark\"><i class=\"bi bi-shield-check me-2 text-success\"></i>Enti di Promozione Sportiva (EPS) e Federazioni Riconosciute (FSN/DSA)</h6>\n                <p class=\"small text-muted mb-3\">La società è predisposta per operare con FISR, UISP, AICS, CSEN, PGS e con il Registro Nazionale delle Attività Sportive Dilettantistiche (RASD).</p>\n                <div class=\"d-flex flex-wrap gap-2\">\n                    <span class=\"badge bg-primary px-3 py-2 fs-6\">CONI</span>\n                    <span class=\"badge bg-success px-3 py-2 fs-6\">FISR</span>\n                    <span class=\"badge bg-info text-dark px-3 py-2 fs-6\">UISP</span>\n                    <span class=\"badge bg-warning text-dark px-3 py-2 fs-6\">AICS</span>\n                    <span class=\"badge bg-secondary px-3 py-2 fs-6\">CSEN</span>\n                    <span class=\"badge bg-dark px-3 py-2 fs-6\">Registro RASD</span>\n                </div>\n            </div>\n        </div>\n        <div class=\"card-footer bg-light px-4 py-3 text-end\">\n            <button type=\"submit\" class=\"btn btn-primary fw-bold shadow-sm\">\n                <i class=\"bi bi-check-lg me-1\"></i> Salva Modifiche Associazione\n            </button>\n        </div>\n    </form>\n</div>\n\n<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>\n"
   },
   {
-    path: 'private/pages/anni.php',
-    filename: 'anni.php',
-    folder: 'private/pages',
-    language: 'php',
-    description: 'Gestione stagioni sportive e anno attivo',
-    content: `<?php
-/**
- * Gestione Anni e Stagioni Sportive
- * Posizione: /private/pages/anni.php
- */
-require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';
-$db = getDbConnection();
-
-$anni = $db->query("SELECT * FROM anno ORDER BY data_inizio DESC")->fetchAll();
-?>
-
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h2 class="h3 fw-bold mb-0"><i class="bi bi-calendar3 me-2 text-primary"></i>Stagioni Sportive</h2>
-        <p class="text-muted small mb-0">Configurazione anni accademici e periodi stagionali</p>
-    </div>
-</div>
-
-<div class="table-responsive bg-white rounded shadow-sm">
-    <table class="table table-hover align-middle mb-0">
-        <thead class="table-light">
-            <tr>
-                <th>Anno Sportivo</th>
-                <th>Data Inizio</th>
-                <th>Data Fine</th>
-                <th>Stato</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php foreach ($anni as $a): ?>
-                <tr>
-                    <td><strong class="fs-6"><?= htmlspecialchars($a['anno']) ?></strong></td>
-                    <td><?= date('d/m/Y', strtotime($a['data_inizio'])) ?></td>
-                    <td><?= date('d/m/Y', strtotime($a['data_fine'])) ?></td>
-                    <td>
-                        <?php if ($a['attivo']): ?>
-                            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Anno Corrente Attivo</span>
-                        <?php else: ?>
-                            <span class="badge bg-secondary">Archiviato</span>
-                        <?php endif; ?>
-                    </td>
-                </tr>
-            <?php endforeach; ?>
-        </tbody>
-    </table>
-</div>
-
-<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>
-`
+    "path": "private/pages/login.php",
+    "filename": "login.php",
+    "folder": "private/pages",
+    "language": "php",
+    "description": "Autenticazione con password hash e credenziali predefinite",
+    "content": "<?php\n/**\n * Pagina di Login & Autenticazione\n * Posizione: /private/pages/login.php\n */\n$error = '';\n\nif ($_SERVER['REQUEST_METHOD'] === 'POST') {\n    $username = trim($_POST['username'] ?? '');\n    $password = $_POST['password'] ?? '';\n\n    if (empty($username) || empty($password)) {\n        $error = 'Inserisci sia il nome utente che la password.';\n    } else {\n        if (loginUser($username, $password)) {\n            $u = getCurrentUser();\n            if (!empty($u['is_kiosk'])) {\n                header('Location: index.php?page=kiosk');\n            } else {\n                header('Location: index.php?page=gestionale');\n            }\n            exit;\n        } else {\n            $error = 'Credenziali non valide. Verifica username e password.';\n        }\n    }\n}\n?>\n<!DOCTYPE html>\n<html lang=\"it\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Accedi - SportGestionale</title>\n    <!-- Bootstrap 5 CSS & Icons (100% Offline in locale) -->\n    <link href=\"assets/css/bootstrap.min.css\" rel=\"stylesheet\">\n    <link rel=\"stylesheet\" href=\"assets/css/bootstrap-icons.min.css\">\n    <style>\n        body {\n            background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%);\n            min-height: 100vh;\n            display: flex;\n            align-items: center;\n            justify-content: center;\n            font-family: system-ui, -apple-system, sans-serif;\n        }\n        .login-card {\n            max-width: 440px;\n            width: 100%;\n            border-radius: 1.25rem;\n            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);\n            background: #ffffff;\n            overflow: hidden;\n        }\n        .login-header {\n            background: #0d6efd;\n            color: #ffffff;\n            padding: 2.25rem 2rem 1.75rem;\n            text-align: center;\n        }\n    </style>\n</head>\n<body class=\"p-3\">\n<div class=\"login-card\">\n    <div class=\"login-header\">\n        <div class=\"d-inline-flex p-3 bg-white bg-opacity-25 rounded-circle mb-3\">\n            <i class=\"bi bi-shield-lock-fill fs-2 text-white\"></i>\n        </div>\n        <h3 class=\"fw-bold mb-1\">SportGestionale</h3>\n        <p class=\"text-white-50 small mb-0\">Accesso sicuro al sistema ASD / Polisportiva</p>\n    </div>\n\n    <div class=\"p-4 p-md-5\">\n        <?php if (!empty($error)): ?>\n            <div class=\"alert alert-danger d-flex align-items-center gap-2 small py-2 px-3 mb-4\" role=\"alert\">\n                <i class=\"bi bi-exclamation-triangle-fill fs-5\"></i>\n                <div><?= htmlspecialchars($error) ?></div>\n            </div>\n        <?php endif; ?>\n\n        <form method=\"POST\" action=\"index.php?page=login\">\n            <div class=\"mb-3\">\n                <label for=\"username\" class=\"form-label fw-semibold small text-muted\">Nome Utente</label>\n                <div class=\"input-group\">\n                    <span class=\"input-group-text bg-light text-muted\"><i class=\"bi bi-person\"></i></span>\n                    <input type=\"text\" class=\"form-control\" id=\"username\" name=\"username\" placeholder=\"es. admin o kiosk\" required autofocus>\n                </div>\n            </div>\n\n            <div class=\"mb-4\">\n                <label for=\"password\" class=\"form-label fw-semibold small text-muted\">Password</label>\n                <div class=\"input-group\">\n                    <span class=\"input-group-text bg-light text-muted\"><i class=\"bi bi-key\"></i></span>\n                    <input type=\"password\" class=\"form-control\" id=\"password\" name=\"password\" placeholder=\"••••••••\" required>\n                </div>\n            </div>\n\n            <button type=\"submit\" class=\"btn btn-primary w-100 py-2 fw-bold shadow-sm\">\n                <i class=\"bi bi-box-arrow-in-right me-1\"></i> Accedi\n            </button>\n        </form>\n\n        <div class=\"mt-4 pt-3 border-top\">\n            <h6 class=\"text-muted small fw-bold text-uppercase mb-2\" style=\"font-size: 0.72rem;\">Credenziali Predefinite:</h6>\n            <div class=\"d-flex flex-column gap-2 small\">\n                <div class=\"p-2 bg-light rounded border d-flex justify-content-between align-items-center\">\n                    <div>\n                        <strong>Amministratore:</strong> <code>admin</code>\n                    </div>\n                    <span class=\"badge bg-secondary-subtle text-secondary\">admin123</span>\n                </div>\n                <div class=\"p-2 bg-light rounded border d-flex justify-content-between align-items-center\">\n                    <div>\n                        <strong>Desk Reception:</strong> <code>kiosk</code>\n                    </div>\n                    <span class=\"badge bg-warning-subtle text-warning-emphasis\">admin123</span>\n                </div>\n            </div>\n        </div>\n    </div>\n</div>\n<!-- Bootstrap 5 JS Bundle (100% Offline in locale) -->\n<script src=\"assets/js/bootstrap.bundle.min.js\"></script>\n</body>\n</html>\n"
   },
   {
-    path: 'private/pages/utenti.php',
-    filename: 'utenti.php',
-    folder: 'private/pages',
-    language: 'php',
-    description: 'Gestione account operatori e flag KIOSK per postazioni totem',
-    content: `<?php
-/**
- * Gestione Utenti e Operatori
- * Posizione: /private/pages/utenti.php
- */
-require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';
-$db = getDbConnection();
-
-$utenti = $db->query("SELECT id, username, nome, ruolo, is_kiosk, attivo, created_at FROM utenti ORDER BY id ASC")->fetchAll();
-?>
-
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h2 class="h3 fw-bold mb-0"><i class="bi bi-person-badge me-2 text-primary"></i>Gestione Utenti & Postazioni</h2>
-        <p class="text-muted small mb-0">Profili operatore, amministratori e configurazione postazioni Kiosk reception</p>
-    </div>
-</div>
-
-<div class="table-responsive bg-white rounded shadow-sm">
-    <table class="table table-hover align-middle mb-0">
-        <thead class="table-light">
-            <tr>
-                <th>Nome Utente</th>
-                <th>Nome Completo</th>
-                <th>Ruolo</th>
-                <th>Modalità Kiosk</th>
-                <th>Stato</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php foreach ($utenti as $u): ?>
-                <tr>
-                    <td><code><?= htmlspecialchars($u['username']) ?></code></td>
-                    <td><strong><?= htmlspecialchars($u['nome']) ?></strong></td>
-                    <td><span class="badge bg-primary-subtle text-primary"><?= ucfirst($u['ruolo']) ?></span></td>
-                    <td>
-                        <?php if ($u['is_kiosk']): ?>
-                            <span class="badge bg-warning text-dark"><i class="bi bi-tablet-landscape me-1"></i>Kiosk Attivo</span>
-                        <?php else: ?>
-                            <span class="badge bg-light text-muted border">Gestionale Web</span>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <span class="badge bg-<?= $u['attivo'] ? 'success' : 'danger' ?>">
-                            <?= $u['attivo'] ? 'Attivo' : 'Disattivato' ?>
-                        </span>
-                    </td>
-                </tr>
-            <?php endforeach; ?>
-        </tbody>
-    </table>
-</div>
-
-<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>
-`
+    "path": "private/pages/logout.php",
+    "filename": "logout.php",
+    "folder": "private/pages",
+    "language": "php",
+    "description": "Distruzione sessione e disconnessione",
+    "content": "<?php\n/**\n * Logout Utente e distruzione sessione\n * Posizione: /private/pages/logout.php\n */\n$_SESSION = [];\n\nif (ini_get(\"session.use_cookies\")) {\n    $params = session_get_cookie_params();\n    setcookie(session_name(), '', time() - 42000,\n        $params[\"path\"], $params[\"domain\"],\n        $params[\"secure\"], $params[\"httponly\"]\n    );\n}\n\nsession_destroy();\nheader('Location: index.php?page=login');\nexit;\n"
   },
   {
-    path: 'private/pages/404.php',
-    filename: '404.php',
-    folder: 'private/pages',
-    language: 'php',
-    description: 'Pagina di errore 404 sicura e responsive',
-    content: `<?php
-/**
- * Errore 404 - Pagina non trovata
- * Posizione: /private/pages/404.php
- */
-require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';
-?>
-<div class="text-center py-5">
-    <div class="display-1 fw-bold text-muted mb-2">404</div>
-    <h3 class="fw-bold mb-3">Pagina non trovata</h3>
-    <p class="text-muted mb-4">La sezione richiesta non esiste o non è accessibile con i tuoi permessi.</p>
-    <a href="index.php?page=gestionale" class="btn btn-primary px-4 fw-bold">
-        <i class="bi bi-speedometer2 me-1"></i> Torna alla Dashboard
-    </a>
-</div>
-<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>
-`
+    "path": "private/pages/404.php",
+    "filename": "404.php",
+    "folder": "private/pages",
+    "language": "php",
+    "description": "Schermata pagina non trovata",
+    "content": "<?php\n/**\n * Errore 404 - Pagina non trovata\n * Posizione: /private/pages/404.php\n */\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';\n?>\n<div class=\"text-center py-5\">\n    <div class=\"display-1 fw-bold text-muted mb-2\">404</div>\n    <h3 class=\"fw-bold mb-3\">Pagina non trovata</h3>\n    <p class=\"text-muted mb-4\">La sezione richiesta non esiste o non è accessibile con i tuoi permessi.</p>\n    <a href=\"index.php?page=gestionale\" class=\"btn btn-primary px-4 fw-bold\">\n        <i class=\"bi bi-speedometer2 me-1\"></i> Torna alla Dashboard\n    </a>\n</div>\n<?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>\n"
   },
   {
-    path: 'private/actions/salva_persona.php',
-    filename: 'salva_persona.php',
-    folder: 'private/actions',
-    language: 'php',
-    description: 'Azione per salvataggio anagrafica persona e tutore legale per atleti minorenni',
-    content: `<?php
-/**
- * Salvataggio Persona e Tutore Minorenni
- * Posizione: /private/actions/salva_persona.php
- */
-if (!defined('PATH_CONFIG')) {
-    $cfgPath = getenv('APP_CONFIG_PATH') ?: dirname(__DIR__, 2) . '/config';
-    if (file_exists($cfgPath . '/paths.php')) require_once $cfgPath . '/paths.php';
-    if (!defined('PATH_CONFIG')) define('PATH_CONFIG', $cfgPath);
-}
-require_once PATH_CONFIG . '/database.php';
-require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : dirname(__DIR__) . '/includes') . '/auth.php';
-requireAuth();
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $db = getDbConnection();
-
-    $nome = trim($_POST['nome'] ?? '');
-    $cognome = trim($_POST['cognome'] ?? '');
-    $cf = strtoupper(trim($_POST['codice_fiscale'] ?? ''));
-    $dataNascita = $_POST['data_nascita'] ?? '';
-    $luogoNascita = trim($_POST['luogo_nascita'] ?? '');
-    $indirizzo = trim($_POST['indirizzo'] ?? '');
-    $citta = trim($_POST['citta'] ?? '');
-    $telefono = trim($_POST['telefono'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $isMinorenne = !empty($_POST['is_minorenne']) ? 1 : 0;
-
-    $tutoreNome = $isMinorenne ? trim($_POST['tutore_nome'] ?? '') : null;
-    $tutoreCognome = $isMinorenne ? trim($_POST['tutore_cognome'] ?? '') : null;
-    $tutoreCf = $isMinorenne ? strtoupper(trim($_POST['tutore_cf'] ?? '')) : null;
-    $tutoreTelefono = $isMinorenne ? trim($_POST['tutore_telefono'] ?? '') : null;
-    $tutoreEmail = $isMinorenne ? trim($_POST['tutore_email'] ?? '') : null;
-    $tutoreRelazione = $isMinorenne ? trim($_POST['tutore_relazione'] ?? 'Genitore/Tutore') : null;
-
-    if (empty($nome) || empty($cognome) || empty($cf) || empty($dataNascita)) {
-        die("Compilare tutti i campi obbligatori (Nome, Cognome, CF, Data Nascita).");
-    }
-
-    try {
-        $stmt = $db->prepare("
-            INSERT INTO persone (nome, cognome, codice_fiscale, data_nascita, luogo_nascita, indirizzo, citta, telefono, email, is_minorenne, tutore_nome, tutore_cognome, tutore_cf, tutore_telefono, tutore_email, tutore_relazione)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ");
-        $stmt->execute([
-            $nome, $cognome, $cf, $dataNascita, $luogoNascita, $indirizzo, $citta, $telefono, $email,
-            $isMinorenne, $tutoreNome, $tutoreCognome, $tutoreCf, $tutoreTelefono, $tutoreEmail, $tutoreRelazione
-        ]);
-
-        header('Location: index.php?page=persone&msg=creato');
-        exit;
-    } catch (Exception $e) {
-        die("Errore salvataggio anagrafica: " . $e->getMessage());
-    }
-}
-`
+    "path": "private/actions/salva_persona.php",
+    "filename": "salva_persona.php",
+    "folder": "private/actions",
+    "language": "php",
+    "description": "Azione salvataggio persona e dati tutore legale",
+    "content": "<?php\n/**\n * Salvataggio Persona e Tutore Minorenni\n * Posizione: /private/actions/salva_persona.php\n */\nif (!defined('PATH_CONFIG')) {\n    $cfgPath = getenv('APP_CONFIG_PATH') ?: dirname(__DIR__, 2) . '/config';\n    if (file_exists($cfgPath . '/paths.php')) require_once $cfgPath . '/paths.php';\n    if (!defined('PATH_CONFIG')) define('PATH_CONFIG', $cfgPath);\n}\nrequire_once PATH_CONFIG . '/database.php';\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : dirname(__DIR__) . '/includes') . '/auth.php';\nrequireAuth();\n\nif ($_SERVER['REQUEST_METHOD'] === 'POST') {\n    $db = getDbConnection();\n\n    $nome = trim($_POST['nome'] ?? '');\n    $cognome = trim($_POST['cognome'] ?? '');\n    $cf = strtoupper(trim($_POST['codice_fiscale'] ?? ''));\n    $dataNascita = $_POST['data_nascita'] ?? '';\n    $luogoNascita = trim($_POST['luogo_nascita'] ?? '');\n    $indirizzo = trim($_POST['indirizzo'] ?? '');\n    $citta = trim($_POST['citta'] ?? '');\n    $telefono = trim($_POST['telefono'] ?? '');\n    $email = trim($_POST['email'] ?? '');\n    $isMinorenne = !empty($_POST['is_minorenne']) ? 1 : 0;\n\n    $tutoreNome = $isMinorenne ? trim($_POST['tutore_nome'] ?? '') : null;\n    $tutoreCognome = $isMinorenne ? trim($_POST['tutore_cognome'] ?? '') : null;\n    $tutoreCf = $isMinorenne ? strtoupper(trim($_POST['tutore_cf'] ?? '')) : null;\n    $tutoreTelefono = $isMinorenne ? trim($_POST['tutore_telefono'] ?? '') : null;\n    $tutoreEmail = $isMinorenne ? trim($_POST['tutore_email'] ?? '') : null;\n    $tutoreRelazione = $isMinorenne ? trim($_POST['tutore_relazione'] ?? 'Genitore/Tutore') : null;\n\n    if (empty($nome) || empty($cognome) || empty($cf) || empty($dataNascita)) {\n        die(\"Compilare tutti i campi obbligatori (Nome, Cognome, CF, Data Nascita).\");\n    }\n\n    try {\n        $stmt = $db->prepare(\"\n            INSERT INTO persone (nome, cognome, codice_fiscale, data_nascita, luogo_nascita, indirizzo, citta, telefono, email, is_minorenne, tutore_nome, tutore_cognome, tutore_cf, tutore_telefono, tutore_email, tutore_relazione)\n            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n        \");\n        $stmt->execute([\n            $nome, $cognome, $cf, $dataNascita, $luogoNascita, $indirizzo, $citta, $telefono, $email,\n            $isMinorenne, $tutoreNome, $tutoreCognome, $tutoreCf, $tutoreTelefono, $tutoreEmail, $tutoreRelazione\n        ]);\n\n        header('Location: index.php?page=persone&msg=creato');\n        exit;\n    } catch (Exception $e) {\n        die(\"Errore salvataggio anagrafica: \" . $e->getMessage());\n    }\n}\n"
   },
   {
-    path: 'README.md',
-    filename: 'README.md',
-    folder: 'root',
-    language: 'markdown',
-    description: 'Guida di installazione completa su Apache, Nginx, XAMPP, MariaDB',
-    content: `# Gestionale Società Sportiva con Kiosk, Quote e MariaDB
-
-Applicazione per la gestione delle società sportive, con anagrafica atleti minorenni e tutori legali, tesseramento annuale, calcolo quote mensili automatico e interfaccia Kiosk Touch per reception.
-
-## Struttura delle Cartelle
-
-\`\`\`
-├── config/
-│   └── database.php             # Connessione PDO MariaDB (Protetto fuori da web root)
-├── database/
-│   └── schema.sql               # Script SQL MariaDB con tabelle, FK e dati seed
-├── private/                     # Cartella PRIVATA (Inclusa solo via codice PHP)
-│   ├── actions/
-│   │   ├── genera_quote.php     # Algoritmo automatico quote mensili
-│   │   └── registra_pagamento.php
-│   ├── includes/
-│   │   ├── auth.php             # Autenticazione e controllo flag is_kiosk
-│   │   ├── header.php
-│   │   └── footer.php
-│   └── pages/
-│       ├── login.php
-│       ├── kiosk.php            # Vista Touch screen con bottoni grandi
-│       ├── gestionale.php       # Cruscotto amministrativo
-│       ├── persone.php          # Tabella anagrafica minorenni/tutori
-│       ├── tesserati.php
-│       ├── gruppi.php
-│       ├── quote.php
-│       ├── quote_scadute.php    # Tabella speciale quote scadute
-│       └── pagamenti.php
-├── public/                      # Web Root visibile al browser
-│   ├── index.php                # Front Controller dinamico
-│   └── .htaccess                # Configurazione Apache
-└── README.md
-\`\`\`
-
-## Installazione Rapida
-
-1. **Creare il Database MariaDB**:
-   - Apri phpMyAdmin o il terminale MySQL/MariaDB
-   - Esegui lo script presente in \`database/schema.sql\`
-   - Il database \`gestionale_sportivo\` verrà creato con tutte le 8 tabelle necessarie.
-
-2. **Configurare la connessione**:
-   - Modifica \`config/database.php\` inserendo \`DB_HOST\`, \`DB_NAME\`, \`DB_USER\` e \`DB_PASS\`.
-
-3. **Configurare il VirtualHost del Web Server**:
-   - Fai puntare la **DocumentRoot** alla cartella \`public/\`.
-   - In questo modo la cartella \`private/\` e \`config/\` rimangono protette e inaccessibili dall'esterno.
-
-4. **Credenziali predefinite**:
-   - **Amministratore Gestionale**: \`admin\` / \`admin\`
-   - **Postazione Kiosk Totem**: \`kiosk\` / \`kiosk\` (Flag \`is_kiosk\` attivo: indirizzato direttamente ai bottoni grandi per reception).
-`
+    "path": "private/actions/salva_tesseramento.php",
+    "filename": "salva_tesseramento.php",
+    "folder": "private/actions",
+    "language": "php",
+    "description": "Azione nuovo tesseramento atleta",
+    "content": "<?php\n/**\n * Nuovo Tesseramento Atleta\n * Posizione: /private/actions/salva_tesseramento.php\n */\nif (!defined('PATH_CONFIG')) {\n    $cfgPath = getenv('APP_CONFIG_PATH') ?: dirname(__DIR__, 2) . '/config';\n    if (file_exists($cfgPath . '/paths.php')) require_once $cfgPath . '/paths.php';\n    if (!defined('PATH_CONFIG')) define('PATH_CONFIG', $cfgPath);\n}\nrequire_once PATH_CONFIG . '/database.php';\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : dirname(__DIR__) . '/includes') . '/auth.php';\nrequireAuth();\n\nif ($_SERVER['REQUEST_METHOD'] === 'POST') {\n    $db = getDbConnection();\n\n    $personaId = (int)($_POST['persona_id'] ?? 0);\n    $annoId = (int)($_POST['anno_id'] ?? 1);\n    $numeroTessera = trim($_POST['numero_tessera'] ?? '');\n    $dataTesseramento = !empty($_POST['data_tesseramento']) ? trim($_POST['data_tesseramento']) : date('Y-m-d');\n    $tipoTesseramento = $_POST['tipo_tesseramento'] ?? 'Agonista';\n    $certificatoScadenza = !empty($_POST['certificato_medico_scadenza']) ? trim($_POST['certificato_medico_scadenza']) : null;\n    $stato = $_POST['stato'] ?? 'Attivo';\n\n    if ($personaId <= 0 || empty($numeroTessera)) {\n        header('Location: index.php?page=tesserati&err=' . urlencode('Selezionare una persona e inserire il numero di tessera.'));\n        exit;\n    }\n\n    try {\n        // Verifica se persona già tesserata in questo anno\n        $stmtCheck = $db->prepare(\"SELECT id FROM tesserati WHERE persona_id = ? AND anno_id = ?\");\n        $stmtCheck->execute([$personaId, $annoId]);\n        if ($stmtCheck->fetch()) {\n            header('Location: index.php?page=tesserati&err=' . urlencode('Questa persona risulta già tesserata per l\\'anno sportivo selezionato.'));\n            exit;\n        }\n\n        $stmt = $db->prepare(\"\n            INSERT INTO tesserati (persona_id, anno_id, numero_tessera, data_tesseramento, tipo_tesseramento, certificato_medico_scadenza, stato)\n            VALUES (?, ?, ?, ?, ?, ?, ?)\n        \");\n        $stmt->execute([\n            $personaId, $annoId, $numeroTessera, $dataTesseramento, $tipoTesseramento, $certificatoScadenza, $stato\n        ]);\n\n        header('Location: index.php?page=tesserati&msg=' . urlencode('Tesseramento registrato con successo.'));\n        exit;\n    } catch (Exception $e) {\n        header('Location: index.php?page=tesserati&err=' . urlencode('Errore salvataggio tesseramento: ' . $e->getMessage()));\n        exit;\n    }\n}\n"
+  },
+  {
+    "path": "private/actions/salva_gruppo.php",
+    "filename": "salva_gruppo.php",
+    "folder": "private/actions",
+    "language": "php",
+    "description": "Azione creazione e modifica gruppo sportivo",
+    "content": "<?php\n/**\n * Salvataggio / Modifica Gruppo Corso Sportivo\n * Posizione: /private/actions/salva_gruppo.php\n */\nif (!defined('PATH_CONFIG')) {\n    $cfgPath = getenv('APP_CONFIG_PATH') ?: dirname(__DIR__, 2) . '/config';\n    if (file_exists($cfgPath . '/paths.php')) require_once $cfgPath . '/paths.php';\n    if (!defined('PATH_CONFIG')) define('PATH_CONFIG', $cfgPath);\n}\nrequire_once PATH_CONFIG . '/database.php';\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : dirname(__DIR__) . '/includes') . '/auth.php';\nrequireAuth();\n\nif ($_SERVER['REQUEST_METHOD'] === 'POST') {\n    $db = getDbConnection();\n\n    $id = !empty($_POST['id']) ? (int)$_POST['id'] : null;\n    $annoId = !empty($_POST['anno_id']) ? (int)$_POST['anno_id'] : 1;\n    $nomeGruppo = trim($_POST['nome_gruppo'] ?? '');\n    $categoria = trim($_POST['categoria'] ?? '');\n    $quotaMensile = (float)str_replace(',', '.', $_POST['quota_mensile'] ?? '0');\n    $giornoScadenza = (int)($_POST['giorno_scadenza_mensile'] ?? 10);\n    $dataInizio = $_POST['data_inizio'] ?? '';\n    $dataFine = $_POST['data_fine'] ?? '';\n    $istruttore = trim($_POST['istruttore'] ?? '');\n    $descrizione = trim($_POST['descrizione'] ?? '');\n\n    if (empty($nomeGruppo) || empty($dataInizio) || empty($dataFine)) {\n        header('Location: index.php?page=gruppi&err=' . urlencode('Compilare tutti i campi obbligatori (Nome Gruppo, Data Inizio, Data Fine).'));\n        exit;\n    }\n\n    if ($giornoScadenza < 1 || $giornoScadenza > 31) {\n        $giornoScadenza = 10;\n    }\n\n    try {\n        if ($id) {\n            $stmt = $db->prepare(\"\n                UPDATE gruppi\n                SET anno_id = ?, nome_gruppo = ?, categoria = ?, quota_mensile = ?,\n                    giorno_scadenza_mensile = ?, data_inizio = ?, data_fine = ?,\n                    istruttore = ?, descrizione = ?\n                WHERE id = ?\n            \");\n            $stmt->execute([\n                $annoId, $nomeGruppo, $categoria, $quotaMensile,\n                $giornoScadenza, $dataInizio, $dataFine,\n                $istruttore, $descrizione, $id\n            ]);\n            $msg = \"Gruppo '{$nomeGruppo}' aggiornato con successo.\";\n        } else {\n            $stmt = $db->prepare(\"\n                INSERT INTO gruppi (anno_id, nome_gruppo, categoria, quota_mensile, giorno_scadenza_mensile, data_inizio, data_fine, istruttore, descrizione)\n                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)\n            \");\n            $stmt->execute([\n                $annoId, $nomeGruppo, $categoria, $quotaMensile,\n                $giornoScadenza, $dataInizio, $dataFine,\n                $istruttore, $descrizione\n            ]);\n            $msg = \"Nuovo gruppo '{$nomeGruppo}' creato con successo.\";\n        }\n\n        header('Location: index.php?page=gruppi&msg=' . urlencode($msg));\n        exit;\n    } catch (Exception $e) {\n        header('Location: index.php?page=gruppi&err=' . urlencode('Errore nel salvataggio gruppo: ' . $e->getMessage()));\n        exit;\n    }\n}\n"
+  },
+  {
+    "path": "private/actions/elimina_gruppo.php",
+    "filename": "elimina_gruppo.php",
+    "folder": "private/actions",
+    "language": "php",
+    "description": "Azione eliminazione sicura gruppo e iscrizioni",
+    "content": "<?php\n/**\n * Eliminazione Gruppo Corso Sportivo\n * Posizione: /private/actions/elimina_gruppo.php\n */\nif (!defined('PATH_CONFIG')) {\n    $cfgPath = getenv('APP_CONFIG_PATH') ?: dirname(__DIR__, 2) . '/config';\n    if (file_exists($cfgPath . '/paths.php')) require_once $cfgPath . '/paths.php';\n    if (!defined('PATH_CONFIG')) define('PATH_CONFIG', $cfgPath);\n}\nrequire_once PATH_CONFIG . '/database.php';\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : dirname(__DIR__) . '/includes') . '/auth.php';\nrequireAuth();\n\n$id = !empty($_POST['id']) ? (int)$_POST['id'] : (!empty($_GET['id']) ? (int)$_GET['id'] : 0);\n\nif ($id <= 0) {\n    header('Location: index.php?page=gruppi&err=' . urlencode('Identificativo gruppo non valido.'));\n    exit;\n}\n\n$db = getDbConnection();\n\ntry {\n    // Recupera nome del gruppo\n    $stmtG = $db->prepare(\"SELECT nome_gruppo FROM gruppi WHERE id = ?\");\n    $stmtG->execute([$id]);\n    $gruppo = $stmtG->fetch();\n\n    if (!$gruppo) {\n        header('Location: index.php?page=gruppi&err=' . urlencode('Gruppo non trovato.'));\n        exit;\n    }\n\n    $nome = $gruppo['nome_gruppo'];\n\n    // Elimina associazioni gruppi_tesserati e quote se necessario\n    $db->beginTransaction();\n\n    // Elimina prima gruppi_tesserati\n    $db->prepare(\"DELETE FROM gruppi_tesserati WHERE gruppo_id = ?\")->execute([$id]);\n\n    // Rimuovi o scollega quote associate a questo gruppo\n    $db->prepare(\"UPDATE quote SET gruppo_id = NULL WHERE gruppo_id = ?\")->execute([$id]);\n\n    // Elimina gruppo\n    $db->prepare(\"DELETE FROM gruppi WHERE id = ?\")->execute([$id]);\n\n    $db->commit();\n\n    header('Location: index.php?page=gruppi&msg=' . urlencode(\"Gruppo '{$nome}' eliminato con successo.\"));\n    exit;\n} catch (Exception $e) {\n    if ($db->inTransaction()) {\n        $db->rollBack();\n    }\n    header('Location: index.php?page=gruppi&err=' . urlencode('Impossibile eliminare il gruppo: ' . $e->getMessage()));\n    exit;\n}\n"
+  },
+  {
+    "path": "private/actions/iscrivi_gruppo.php",
+    "filename": "iscrivi_gruppo.php",
+    "folder": "private/actions",
+    "language": "php",
+    "description": "Azione iscrizione atleta a gruppo e rateizzazione",
+    "content": "<?php\n/**\n * Iscrizione Atleta a Gruppo e Generazione Automatica Quote\n * Posizione: /private/actions/iscrivi_gruppo.php\n */\nif (!defined('PATH_CONFIG')) {\n    $cfgPath = getenv('APP_CONFIG_PATH') ?: dirname(__DIR__, 2) . '/config';\n    if (file_exists($cfgPath . '/paths.php')) require_once $cfgPath . '/paths.php';\n    if (!defined('PATH_CONFIG')) define('PATH_CONFIG', $cfgPath);\n}\nrequire_once PATH_CONFIG . '/database.php';\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : dirname(__DIR__) . '/includes') . '/auth.php';\nrequire_once (defined('PATH_ACTIONS') ? PATH_ACTIONS : __DIR__) . '/genera_quote.php';\nrequireAuth();\n\nif ($_SERVER['REQUEST_METHOD'] === 'POST') {\n    $db = getDbConnection();\n\n    $gruppoId = (int)($_POST['gruppo_id'] ?? 0);\n    $tesseratoId = (int)($_POST['tesserato_id'] ?? 0);\n    $dataIscrizione = !empty($_POST['data_iscrizione']) ? trim($_POST['data_iscrizione']) : date('Y-m-d');\n    $note = trim($_POST['note'] ?? '');\n    $generaQuote = !empty($_POST['genera_quote']);\n\n    if ($gruppoId <= 0 || $tesseratoId <= 0) {\n        header('Location: index.php?page=gruppi&err=' . urlencode('Selezionare obbligatoriamente sia il gruppo che l\\'atleta tesserato.'));\n        exit;\n    }\n\n    try {\n        // Controlla se già iscritto\n        $stmtCheck = $db->prepare(\"SELECT id FROM gruppi_tesserati WHERE gruppo_id = ? AND tesserato_id = ?\");\n        $stmtCheck->execute([$gruppoId, $tesseratoId]);\n        if ($stmtCheck->fetch()) {\n            header('Location: index.php?page=gruppi&err=' . urlencode('L\\'atleta selezionato risulta già iscritto a questo gruppo.'));\n            exit;\n        }\n\n        // Inserisci iscrizione\n        $stmt = $db->prepare(\"INSERT INTO gruppi_tesserati (gruppo_id, tesserato_id, data_iscrizione, note) VALUES (?, ?, ?, ?)\");\n        $stmt->execute([$gruppoId, $tesseratoId, $dataIscrizione, $note]);\n\n        $quoteMsg = \"\";\n        if ($generaQuote) {\n            $quoteRes = generaQuoteAutomatiche($tesseratoId, $gruppoId);\n            $num = $quoteRes['quote_generate'];\n            $quoteMsg = \" Generate in automatico {$num} rate mensili per l'atleta.\";\n        }\n\n        header('Location: index.php?page=gruppi&msg=' . urlencode(\"Atleta iscritto al corso con successo.{$quoteMsg}\"));\n        exit;\n    } catch (Exception $e) {\n        header('Location: index.php?page=gruppi&err=' . urlencode('Errore iscrizione: ' . $e->getMessage()));\n        exit;\n    }\n}\n"
+  },
+  {
+    "path": "private/actions/disiscrivi_gruppo.php",
+    "filename": "disiscrivi_gruppo.php",
+    "folder": "private/actions",
+    "language": "php",
+    "description": "Azione disiscrizione atleta e annullamento quote future",
+    "content": "<?php\n/**\n * Disiscrizione Atleta da Gruppo\n * Posizione: /private/actions/disiscrivi_gruppo.php\n */\nif (!defined('PATH_CONFIG')) {\n    $cfgPath = getenv('APP_CONFIG_PATH') ?: dirname(__DIR__, 2) . '/config';\n    if (file_exists($cfgPath . '/paths.php')) require_once $cfgPath . '/paths.php';\n    if (!defined('PATH_CONFIG')) define('PATH_CONFIG', $cfgPath);\n}\nrequire_once PATH_CONFIG . '/database.php';\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : dirname(__DIR__) . '/includes') . '/auth.php';\nrequireAuth();\n\n$gruppoId = (int)($_REQUEST['gruppo_id'] ?? 0);\n$tesseratoId = (int)($_REQUEST['tesserato_id'] ?? 0);\n$annullaQuoteFuture = !empty($_REQUEST['annulla_quote_future']);\n\nif ($gruppoId <= 0 || $tesseratoId <= 0) {\n    header('Location: index.php?page=gruppi&err=' . urlencode('Parametri di disiscrizione non validi.'));\n    exit;\n}\n\n$db = getDbConnection();\n\ntry {\n    $db->beginTransaction();\n\n    // Rimuovi iscrizione dal gruppo\n    $stmt = $db->prepare(\"DELETE FROM gruppi_tesserati WHERE gruppo_id = ? AND tesserato_id = ?\");\n    $stmt->execute([$gruppoId, $tesseratoId]);\n\n    $quoteAnnullate = 0;\n    if ($annullaQuoteFuture) {\n        // Annulla le quote non pagate future per questo gruppo\n        $today = date('Y-m-d');\n        $stmtQ = $db->prepare(\"\n            UPDATE quote\n            SET stato = 'annullata', causale = CONCAT(causale, ' [ANNULLATA PER DISISCRIZIONE]')\n            WHERE tesserato_id = ? AND gruppo_id = ? AND stato = 'da_pagare' AND data_scadenza >= ?\n        \");\n        $stmtQ->execute([$tesseratoId, $gruppoId, $today]);\n        $quoteAnnullate = $stmtQ->rowCount();\n    }\n\n    $db->commit();\n\n    $annullaMsg = $quoteAnnullate > 0 ? \" e annullate {$quoteAnnullate} quote future non saldate.\" : \".\";\n    header('Location: index.php?page=gruppi&msg=' . urlencode(\"Atleta disiscritto dal corso{$annullaMsg}\"));\n    exit;\n} catch (Exception $e) {\n    if ($db->inTransaction()) {\n        $db->rollBack();\n    }\n    header('Location: index.php?page=gruppi&err=' . urlencode('Errore disiscrizione: ' . $e->getMessage()));\n    exit;\n}\n"
+  },
+  {
+    "path": "private/actions/genera_quote.php",
+    "filename": "genera_quote.php",
+    "folder": "private/actions",
+    "language": "php",
+    "description": "Algoritmo e azione calcolo quote mensili automatiche",
+    "content": "<?php\n/**\n * Generazione automatica quote mensili per atleta iscritto a un gruppo\n * Posizione: /private/actions/genera_quote.php\n *\n * Formula: Per ciascun mese compreso tra data_inizio e data_fine del gruppo:\n *  - Calcola giorno scadenza (es. giorno 10 del mese)\n *  - Genera causale (es. \"Quota 2024-10 - Basket Under 14\")\n *  - Inserisce la quota con stato 'da_pagare' se non già presente per quel mese\n */\n\nif (!defined('PATH_CONFIG')) {\n    $cfgPath = getenv('APP_CONFIG_PATH') ?: dirname(__DIR__, 2) . '/config';\n    if (file_exists($cfgPath . '/paths.php')) require_once $cfgPath . '/paths.php';\n    if (!defined('PATH_CONFIG')) define('PATH_CONFIG', $cfgPath);\n}\nrequire_once PATH_CONFIG . '/database.php';\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : dirname(__DIR__) . '/includes') . '/auth.php';\n\nfunction generaQuoteAutomatiche($tesseratoId, $gruppoId) {\n    $db = getDbConnection();\n\n    // 1. Recupero dati gruppo\n    $stmtG = $db->prepare(\"SELECT * FROM gruppi WHERE id = ?\");\n    $stmtG->execute([$gruppoId]);\n    $gruppo = $stmtG->fetch();\n\n    if (!$gruppo) {\n        return ['success' => false, 'message' => 'Gruppo non trovato', 'quote_generate' => 0];\n    }\n\n    $dataInizio = new DateTime($gruppo['data_inizio']);\n    $dataFine   = new DateTime($gruppo['data_fine']);\n    $giornoScadenza = (int)$gruppo['giorno_scadenza_mensile'];\n    $quotaMensile   = (float)$gruppo['quota_mensile'];\n\n    $mesiGenerati = 0;\n    $current = clone $dataInizio;\n    $current->modify('first day of this month');\n\n    $end = clone $dataFine;\n    $end->modify('first day of next month');\n\n    $stmtCheck = $db->prepare(\"SELECT id FROM quote WHERE tesserato_id = ? AND (gruppo_id = ? OR gruppo_id IS NULL) AND mese_riferimento = ?\");\n    $stmtInsert = $db->prepare(\"INSERT INTO quote (tesserato_id, gruppo_id, causale, importo, importo_pagato, data_scadenza, stato, mese_riferimento) VALUES (?, ?, ?, ?, 0.00, ?, 'da_pagare', ?)\");\n\n    while ($current < $end) {\n        $meseRif = $current->format('Y-m'); // es. 2024-09\n\n        // Controlla se la quota per questo mese esiste già\n        $stmtCheck->execute([$tesseratoId, $gruppoId, $meseRif]);\n        if (!$stmtCheck->fetch()) {\n            // Calcola data scadenza con giorno specifico del mese\n            $giornoEffettivo = min($giornoScadenza, (int)$current->format('t'));\n            $dataScadenza = $current->format('Y-m-') . sprintf('%02d', $giornoEffettivo);\n            $causale = \"Quota \" . $meseRif . \" - \" . $gruppo['nome_gruppo'];\n\n            $stmtInsert->execute([\n                $tesseratoId,\n                $gruppoId,\n                $causale,\n                $quotaMensile,\n                $dataScadenza,\n                $meseRif\n            ]);\n            $mesiGenerati++;\n        }\n\n        $current->modify('+1 month');\n    }\n\n    return ['success' => true, 'quote_generate' => $mesiGenerati];\n}\n\n// Se invocato direttamente come azione HTTP (GET o POST)\nif (isset($_GET['action']) && $_GET['action'] === 'genera_quote') {\n    requireAuth();\n    $db = getDbConnection();\n\n    $gruppoId = !empty($_REQUEST['gruppo_id']) ? (int)$_REQUEST['gruppo_id'] : 0;\n    $tesseratoId = !empty($_REQUEST['tesserato_id']) ? (int)$_REQUEST['tesserato_id'] : 0;\n    $redirectPage = !empty($_REQUEST['redirect']) ? trim($_REQUEST['redirect']) : 'gruppi';\n\n    $totaleQuote = 0;\n\n    if ($tesseratoId > 0 && $gruppoId > 0) {\n        $res = generaQuoteAutomatiche($tesseratoId, $gruppoId);\n        $totaleQuote += $res['quote_generate'];\n    } elseif ($gruppoId > 0) {\n        // Genera per tutti gli iscritti al gruppo\n        $iscritti = $db->prepare(\"SELECT tesserato_id FROM gruppi_tesserati WHERE gruppo_id = ?\");\n        $iscritti->execute([$gruppoId]);\n        foreach ($iscritti->fetchAll() as $row) {\n            $res = generaQuoteAutomatiche($row['tesserato_id'], $gruppoId);\n            $totaleQuote += $res['quote_generate'];\n        }\n    } else {\n        // Genera per tutti i gruppi\n        $tuttiGruppi = $db->query(\"SELECT gt.tesserato_id, gt.gruppo_id FROM gruppi_tesserati gt INNER JOIN gruppi g ON gt.gruppo_id = g.id\")->fetchAll();\n        foreach ($tuttiGruppi as $row) {\n            $res = generaQuoteAutomatiche($row['tesserato_id'], $row['gruppo_id']);\n            $totaleQuote += $res['quote_generate'];\n        }\n    }\n\n    $msg = $totaleQuote > 0 \n        ? \"Generate con successo {$totaleQuote} quote mensili automatiche.\"\n        : \"Tutte le quote mensili per il periodo risultano già generate e sincronizzate.\";\n\n    header(\"Location: index.php?page={$redirectPage}&msg=\" . urlencode($msg));\n    exit;\n}\n"
+  },
+  {
+    "path": "private/actions/registra_pagamento.php",
+    "filename": "registra_pagamento.php",
+    "folder": "private/actions",
+    "language": "php",
+    "description": "Azione registrazione incasso e saldo quota",
+    "content": "<?php\n/**\n * Registrazione Pagamento (Quota o Extra)\n * Posizione: /private/actions/registra_pagamento.php\n */\n\nif (!defined('PATH_CONFIG')) {\n    $cfgPath = getenv('APP_CONFIG_PATH') ?: dirname(__DIR__, 2) . '/config';\n    if (file_exists($cfgPath . '/paths.php')) require_once $cfgPath . '/paths.php';\n    if (!defined('PATH_CONFIG')) define('PATH_CONFIG', $cfgPath);\n}\nrequire_once PATH_CONFIG . '/database.php';\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : dirname(__DIR__) . '/includes') . '/auth.php';\nrequireAuth();\n\nif ($_SERVER['REQUEST_METHOD'] === 'POST') {\n    $db = getDbConnection();\n    \n    $tesseratoId   = (int)($_POST['tesserato_id'] ?? 0);\n    $quotaId       = !empty($_POST['quota_id']) ? (int)$_POST['quota_id'] : null;\n    $importo       = (float)($_POST['importo'] ?? 0);\n    $metodo        = $_POST['metodo_pagamento'] ?? 'contanti';\n    $causale       = trim($_POST['causale'] ?? '');\n    $note          = trim($_POST['note'] ?? '');\n    $ricevutaNum   = 'RIC-' . date('Y') . '-' . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);\n\n    if ($tesseratoId <= 0 || $importo <= 0) {\n        die(\"Dati non validi\");\n    }\n\n    $db->beginTransaction();\n    try {\n        // Inserisce Pagamento\n        $stmtP = $db->prepare(\"INSERT INTO pagamenti (tesserato_id, quota_id, importo, data_pagamento, metodo_pagamento, causale, ricevuta_numero, note) VALUES (?, ?, ?, NOW(), ?, ?, ?, ?)\");\n        $stmtP->execute([$tesseratoId, $quotaId, $importo, $metodo, $causale, $ricevutaNum, $note]);\n\n        // Se collegato a una quota, aggiorna importo_pagato e stato\n        if ($quotaId !== null) {\n            $stmtQ = $db->prepare(\"SELECT importo, importo_pagato FROM quote WHERE id = ? FOR UPDATE\");\n            $stmtQ->execute([$quotaId]);\n            $quota = $stmtQ->fetch();\n\n            if ($quota) {\n                $nuovoPagato = (float)$quota['importo_pagato'] + $importo;\n                $nuovoStato = ($nuovoPagato >= (float)$quota['importo']) ? 'pagata' : 'parziale';\n\n                $stmtUpdate = $db->prepare(\"UPDATE quote SET importo_pagato = ?, stato = ? WHERE id = ?\");\n                $stmtUpdate->execute([$nuovoPagato, $nuovoStato, $quotaId]);\n            }\n        }\n\n        $db->commit();\n        header('Location: index.php?page=pagamenti&msg=success');\n        exit;\n    } catch (Exception $e) {\n        $db->rollBack();\n        die(\"Errore salvataggio: \" . $e->getMessage());\n    }\n}\n"
+  },
+  {
+    "path": "private/actions/annulla_quota.php",
+    "filename": "annulla_quota.php",
+    "folder": "private/actions",
+    "language": "php",
+    "description": "Azione annullamento quota per ritiro o esonero",
+    "content": "<?php\n/**\n * Annullamento Quota Mensile (per ritiro, esonero o motivazione contabile)\n * Posizione: /private/actions/annulla_quota.php\n */\nif (!defined('PATH_CONFIG')) {\n    $cfgPath = getenv('APP_CONFIG_PATH') ?: dirname(__DIR__, 2) . '/config';\n    if (file_exists($cfgPath . '/paths.php')) require_once $cfgPath . '/paths.php';\n    if (!defined('PATH_CONFIG')) define('PATH_CONFIG', $cfgPath);\n}\nrequire_once PATH_CONFIG . '/database.php';\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : dirname(__DIR__) . '/includes') . '/auth.php';\nrequireAuth();\n\n$quotaId = (int)($_REQUEST['id'] ?? 0);\n$motivo = trim($_REQUEST['motivo'] ?? 'Annullamento manuale da segreteria');\n$redirect = !empty($_REQUEST['redirect']) ? trim($_REQUEST['redirect']) : 'quote';\n\nif ($quotaId <= 0) {\n    header(\"Location: index.php?page={$redirect}&err=\" . urlencode('Identificativo quota non valido.'));\n    exit;\n}\n\n$db = getDbConnection();\n\ntry {\n    $stmt = $db->prepare(\"\n        UPDATE quote\n        SET stato = 'annullata', causale = CONCAT(causale, ' [ANNULLATA: ', ?, ']')\n        WHERE id = ? AND stato != 'pagata'\n    \");\n    $stmt->execute([$motivo, $quotaId]);\n\n    if ($stmt->rowCount() > 0) {\n        header(\"Location: index.php?page={$redirect}&msg=\" . urlencode('Quota contrassegnata come annullata con successo.'));\n    } else {\n        header(\"Location: index.php?page={$redirect}&err=\" . urlencode('Impossibile annullare: la quota potrebbe essere già stata saldata o non esistere.'));\n    }\n    exit;\n} catch (Exception $e) {\n    header(\"Location: index.php?page={$redirect}&err=\" . urlencode('Errore durante annullamento quota: ' . $e->getMessage()));\n    exit;\n}\n"
+  },
+  {
+    "path": "private/actions/salva_spesa.php",
+    "filename": "salva_spesa.php",
+    "folder": "private/actions",
+    "language": "php",
+    "description": "Azione inserimento o modifica spesa previsionale a budget",
+    "content": "<?php\n/**\n * Salvataggio Spesa Previsionale (Budget Spese)\n * Posizione: /private/actions/salva_spesa.php\n */\nif (!defined('PATH_CONFIG')) {\n    $cfgPath = getenv('APP_CONFIG_PATH') ?: dirname(__DIR__, 2) . '/config';\n    if (file_exists($cfgPath . '/paths.php')) require_once $cfgPath . '/paths.php';\n    if (!defined('PATH_CONFIG')) define('PATH_CONFIG', $cfgPath);\n}\nrequire_once PATH_CONFIG . '/database.php';\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : dirname(__DIR__) . '/includes') . '/auth.php';\nrequireAuth();\n\nif ($_SERVER['REQUEST_METHOD'] === 'POST') {\n    $db = getDbConnection();\n\n    $id = !empty($_POST['id']) ? (int)$_POST['id'] : null;\n    $annoId = !empty($_POST['anno_id']) ? (int)$_POST['anno_id'] : 1;\n    $titolo = trim($_POST['titolo'] ?? '');\n    $categoria = trim($_POST['categoria'] ?? 'Altro');\n    $importoMensile = (float)str_replace(',', '.', $_POST['importo_mensile'] ?? '0');\n    $ricorrente = !empty($_POST['ricorrente']) ? 1 : 0;\n    $mesiArray = isset($_POST['mesi']) && is_array($_POST['mesi']) ? array_values($_POST['mesi']) : [];\n    $mesiJson = (!$ricorrente && !empty($mesiArray)) ? json_encode($mesiArray) : null;\n    $note = trim($_POST['note'] ?? '');\n\n    if (empty($titolo) || $importoMensile <= 0) {\n        header('Location: index.php?page=previsioni&err=' . urlencode('Specificare un titolo valido e un importo mensile superiore a 0.'));\n        exit;\n    }\n\n    try {\n        if ($id) {\n            $stmt = $db->prepare(\"\n                UPDATE spese_previsionali\n                SET anno_id = ?, titolo = ?, categoria = ?, importo_mensile = ?, ricorrente = ?, mesi_json = ?, note = ?\n                WHERE id = ?\n            \");\n            $stmt->execute([$annoId, $titolo, $categoria, $importoMensile, $ricorrente, $mesiJson, $note, $id]);\n            $msg = \"Spesa previsionale '{$titolo}' aggiornata con successo.\";\n        } else {\n            $stmt = $db->prepare(\"\n                INSERT INTO spese_previsionali (anno_id, titolo, categoria, importo_mensile, ricorrente, mesi_json, note)\n                VALUES (?, ?, ?, ?, ?, ?, ?)\n            \");\n            $stmt->execute([$annoId, $titolo, $categoria, $importoMensile, $ricorrente, $mesiJson, $note]);\n            $msg = \"Spesa previsionale '{$titolo}' inserita a budget con successo.\";\n        }\n\n        header('Location: index.php?page=previsioni&msg=' . urlencode($msg));\n        exit;\n    } catch (Exception $e) {\n        header('Location: index.php?page=previsioni&err=' . urlencode('Errore salvataggio spesa: ' . $e->getMessage()));\n        exit;\n    }\n}\n"
+  },
+  {
+    "path": "private/actions/elimina_spesa.php",
+    "filename": "elimina_spesa.php",
+    "folder": "private/actions",
+    "language": "php",
+    "description": "Azione eliminazione spesa dal budget",
+    "content": "<?php\n/**\n * Eliminazione Spesa Previsionale (Budget Spese)\n * Posizione: /private/actions/elimina_spesa.php\n */\nif (!defined('PATH_CONFIG')) {\n    $cfgPath = getenv('APP_CONFIG_PATH') ?: dirname(__DIR__, 2) . '/config';\n    if (file_exists($cfgPath . '/paths.php')) require_once $cfgPath . '/paths.php';\n    if (!defined('PATH_CONFIG')) define('PATH_CONFIG', $cfgPath);\n}\nrequire_once PATH_CONFIG . '/database.php';\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : dirname(__DIR__) . '/includes') . '/auth.php';\nrequireAuth();\n\n$id = (int)($_REQUEST['id'] ?? 0);\n\nif ($id <= 0) {\n    header('Location: index.php?page=previsioni&err=' . urlencode('Identificativo spesa non valido.'));\n    exit;\n}\n\n$db = getDbConnection();\n\ntry {\n    $stmt = $db->prepare(\"DELETE FROM spese_previsionali WHERE id = ?\");\n    $stmt->execute([$id]);\n\n    header('Location: index.php?page=previsioni&msg=' . urlencode('Voce di spesa eliminata dal budget previsionale.'));\n    exit;\n} catch (Exception $e) {\n    header('Location: index.php?page=previsioni&err=' . urlencode('Errore eliminazione spesa: ' . $e->getMessage()));\n    exit;\n}\n"
+  },
+  {
+    "path": "private/actions/salva_associazione.php",
+    "filename": "salva_associazione.php",
+    "folder": "private/actions",
+    "language": "php",
+    "description": "Azione aggiornamento anagrafica associazione sportiva",
+    "content": "<?php\n/**\n * Salvataggio Dati Associazione Sportiva & Enti Affiliati\n * Posizione: /private/actions/salva_associazione.php\n */\nif (!defined('PATH_CONFIG')) {\n    $cfgPath = getenv('APP_CONFIG_PATH') ?: dirname(__DIR__, 2) . '/config';\n    if (file_exists($cfgPath . '/paths.php')) require_once $cfgPath . '/paths.php';\n    if (!defined('PATH_CONFIG')) define('PATH_CONFIG', $cfgPath);\n}\nrequire_once PATH_CONFIG . '/database.php';\nrequire_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : dirname(__DIR__) . '/includes') . '/auth.php';\nrequireAuth();\n\nif ($_SERVER['REQUEST_METHOD'] === 'POST') {\n    $db = getDbConnection();\n\n    $denominazione = trim($_POST['denominazione'] ?? '');\n    $cf = strtoupper(trim($_POST['codice_fiscale'] ?? ''));\n    $piva = trim($_POST['partita_iva'] ?? '');\n    $indirizzo = trim($_POST['indirizzo'] ?? '');\n    $cap = trim($_POST['cap'] ?? '');\n    $comune = trim($_POST['comune'] ?? '');\n    $provincia = strtoupper(trim($_POST['provincia'] ?? ''));\n    $legaleRappresentante = trim($_POST['legale_rappresentante'] ?? '');\n    $telefono = trim($_POST['telefono'] ?? '');\n    $email = trim($_POST['email'] ?? '');\n    $pec = trim($_POST['pec'] ?? '');\n    $codiceAffiliazione = trim($_POST['codice_affiliazione'] ?? '');\n    $iban = strtoupper(trim($_POST['iban'] ?? ''));\n\n    if (empty($denominazione) || empty($cf) || empty($legaleRappresentante)) {\n        header('Location: index.php?page=associazione&err=' . urlencode('Denominazione, Codice Fiscale e Legale Rappresentante sono obbligatori.'));\n        exit;\n    }\n\n    try {\n        $stmt = $db->prepare(\"\n            INSERT INTO associazione (id, denominazione, codice_fiscale, partita_iva, indirizzo, cap, comune, provincia, legale_rappresentante, telefono, email, pec, codice_affiliazione, iban)\n            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n            ON DUPLICATE KEY UPDATE\n                denominazione = VALUES(denominazione),\n                codice_fiscale = VALUES(codice_fiscale),\n                partita_iva = VALUES(partita_iva),\n                indirizzo = VALUES(indirizzo),\n                cap = VALUES(cap),\n                comune = VALUES(comune),\n                provincia = VALUES(provincia),\n                legale_rappresentante = VALUES(legale_rappresentante),\n                telefono = VALUES(telefono),\n                email = VALUES(email),\n                pec = VALUES(pec),\n                codice_affiliazione = VALUES(codice_affiliazione),\n                iban = VALUES(iban)\n        \");\n        $stmt->execute([\n            $denominazione, $cf, $piva, $indirizzo, $cap, $comune, $provincia,\n            $legaleRappresentante, $telefono, $email, $pec, $codiceAffiliazione, $iban\n        ]);\n\n        header('Location: index.php?page=associazione&msg=' . urlencode('Dati associazione sportiva aggiornati con successo.'));\n        exit;\n    } catch (Exception $e) {\n        header('Location: index.php?page=associazione&err=' . urlencode('Errore salvataggio dati associazione: ' . $e->getMessage()));\n        exit;\n    }\n}\n"
+  },
+  {
+    "path": "README.md",
+    "filename": "README.md",
+    "folder": "root",
+    "language": "markdown",
+    "description": "Istruzioni complete per installazione su MariaDB e Apache",
+    "content": "# Backend PHP & MariaDB - Gestionale Sportivo ASD\n\nQuesta cartella contiene l'architettura backend completa in **PHP Nativo + MariaDB / MySQL**, sviluppata con standard di sicurezza (Prepared Statements PDO, separazione Web Root / cartella privata protetta, Kiosk mode) e con **supporto 100% OFFLINE** (tutti i CSS, JS e font di Bootstrap 5 sono inclusi localmente).\n\n---\n\n## 📁 Struttura delle Cartelle\n\n```\nphp-backend/\n├── database/\n│   └── schema.sql              # Script DDL completo con tabelle e dati iniziali di prova\n├── config/\n│   ├── .htaccess               # Protezione accesso diretto\n│   ├── database.php            # Parametri di connessione PDO a MariaDB/MySQL\n│   └── paths.php               # Parametrizzazione centralizzata percorsi (config, private, public, assets)\n├── public/                     # <-- QUESTA DEVE ESSERE LA DOCUMENT ROOT DEL WEBSERVER\n│   ├── .htaccess               # URL Rewriting verso index.php\n│   ├── index.php               # Front Controller unico pubblico\n│   ├── paths.local.php.example # Esempio per override percorsi su filesystem custom\n│   └── assets/                 # <-- File statici locali 100% offline (Nessuna connessione internet richiesta)\n│       ├── css/\n│       │   ├── bootstrap.min.css         # Bootstrap 5.3 CSS\n│       │   ├── bootstrap-icons.min.css   # Icone Bootstrap CSS\n│       │   └── fonts/                    # Font WOFF/WOFF2 per icone offline\n│       │       ├── bootstrap-icons.woff\n│       │       └── bootstrap-icons.woff2\n│       ├── js/\n│       │   └── bootstrap.bundle.min.js   # Bootstrap 5.3 JS Bundle (con Popper)\n│       └── fonts/                        # Font WOFF/WOFF2 (risoluzione root)\n│           ├── bootstrap-icons.woff\n│           └── bootstrap-icons.woff2\n├── private/                    # <-- Cartella non accessibile direttamente dal browser\n│   ├── .htaccess               # 'Require all denied'\n│   ├── includes/\n│   │   ├── auth.php            # Controllo sessioni, permessi e login Kiosk/Admin\n│   │   ├── functions.php       # Funzioni di utilità, scadenziari e calcolo quote\n│   │   ├── header.php          # Navbar e layout Bootstrap 5 (link locali ad assets/)\n│   │   └── footer.php          # Chiusura layout e script JS (link locale ad assets/)\n│   └── pages/\n│       ├── login.php           # Autenticazione con form Bootstrap 5 e credenziali\n│       ├── logout.php          # Disconnessione sicura e distruzione sessione\n│       ├── gestionale.php      # Cruscotto principale con KPI e scadenze\n│       ├── kiosk.php           # Interfaccia semplificata Touch per Totem/Reception\n│       ├── persone.php         # Anagrafica atleti e tutori legali minorenni\n│       ├── tesserati.php       # Registro tesserati, numeri tessera e visite mediche\n│       ├── gruppi.php          # Configurazione corsi, orari e quote mensili\n│       ├── quote.php           # Scadenziario completo quote con filtri\n│       ├── quote_scadute.php   # Registro solleciti e insoluti\n│       ├── pagamenti.php       # Registrazione incassi e quietanze\n│       ├── anni.php            # Stagioni sportive\n│       ├── utenti.php          # Gestione operatori e postazioni\n│       └── 404.php             # Errore pagina non trovata\n│   └── actions/\n│       ├── genera_quote.php    # Algoritmo automatico calcolo scadenze\n│       ├── registra_pagamento.php # Incasso quote o pagamenti liberi\n│       └── salva_persona.php   # Creazione anagrafica persona e tutore\n└── README.md\n```\n\n---\n\n## 🌐 Supporto 100% Offline (Senza Connessione Internet)\n\nTutti i fogli di stile CSS, gli script JavaScript e i font delle icone sono salvati localmente nella cartella `public/assets/`.\n- **Nessuna chiamata a CDN o server esterni** (`cdn.jsdelivr.net`).\n- Il gestionale funziona perfettamente su personal computer, server locali, intranet aziendali o postazioni totem reception completamente isolate da Internet.\n\n---\n\n## 🚀 Istruzioni di Installazione (XAMPP / LAMP / Hosting)\n\n### 1. Importa il Database\n1. Apri **phpMyAdmin** o la console MySQL/MariaDB:\n   ```bash\n   mysql -u root -p < database/schema.sql\n   ```\n   Verrà creato il database `gestionale_sportivo` con tutte le tabelle e gli utenti iniziali.\n\n### 2. Configura le credenziali del Database\nModifica il file `config/database.php`:\n```php\ndefine('DB_HOST', 'localhost');\ndefine('DB_NAME', 'gestionale_sportivo');\ndefine('DB_USER', 'tuo_utente_mysql');\ndefine('DB_PASS', 'tua_password');\n```\n\n### 3. Configura il Web Server (Apache)\nPer massima sicurezza, imposta come **DocumentRoot** la cartella `php-backend/public/`. In questo modo la cartella `private/` e i file di configurazione non saranno mai esposti pubblicamente su Internet.\n\nSe usi **XAMPP / Wamp**:\nCopia l'intera cartella in `htdocs` e accedi a:\n`http://localhost/php-backend/public/`\n\n### 4. Credenziali di Accesso Predefinite:\n- **Amministratore**:\n  - Username: `admin`\n  - Password: `admin123`\n- **Desk Kiosk**:\n  - Username: `kiosk`\n  - Password: `admin123`\n\n---\n\n## 🔧 Come Parametrizzare i Percorsi di 'private' e 'config'\n\nTutti i percorsi sono completamente parametrizzati tramite costanti (`PATH_CONFIG`, `PATH_PRIVATE`, `PATH_INCLUDES`, `PATH_PAGES`, `PATH_ACTIONS`).\n\n### Opzione 1: File Locale `public/paths.local.php` (Consigliato per hosting condiviso o XAMPP)\nRinomina `public/paths.local.php.example` in `public/paths.local.php` e imposta i tuoi percorsi personalizzati:\n```php\n<?php\ndefine('PATH_ROOT', '/var/www/gestionale');\ndefine('PATH_CONFIG', '/var/www/gestionale/mia_configurazione');\ndefine('PATH_PRIVATE', '/var/www/gestionale/cartella_privata_sicura');\n```\n\n### Opzione 2: Variabili d'Ambiente Web Server (LAMP / Nginx / Docker)\nPuoi configurare le variabili d'ambiente direttamente nel tuo web server:\n- **Apache (VirtualHost o .htaccess)**:\n  ```apache\n  SetEnv APP_CONFIG_PATH \"/var/secure/config\"\n  SetEnv APP_PRIVATE_PATH \"/var/secure/private\"\n  ```\n- **Nginx (fastcgi_params)**:\n  ```nginx\n  fastcgi_param APP_CONFIG_PATH /var/secure/config;\n  fastcgi_param APP_PRIVATE_PATH /var/secure/private;\n  ```\n\n### Opzione 3: Modifica diretta di `config/paths.php`\nPuoi modificare direttamente i percorsi predefiniti all'interno del file `config/paths.php`.\n"
   }
 ];

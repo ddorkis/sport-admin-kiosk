@@ -154,8 +154,22 @@ CREATE TABLE IF NOT EXISTS `associazione` (
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 10. TABELLA SPESE PREVISIONALI (Budget & Previsione Bilancio CD)
+CREATE TABLE IF NOT EXISTS `spese_previsionali` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `anno_id` INT NOT NULL,
+  `titolo` VARCHAR(150) NOT NULL,
+  `categoria` VARCHAR(80) NOT NULL DEFAULT 'Altro',
+  `importo_mensile` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `ricorrente` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 se spesa attiva tutti i mesi della stagione',
+  `mesi_json` TEXT NULL COMMENT 'JSON array dei mesi specifici se non ricorrente',
+  `note` TEXT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT `fk_spese_anno` FOREIGN KEY (`anno_id`) REFERENCES `anno` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ==============================================================================
--- DATI INIZIALI DI SEEDING (Admin predefinito e Anno 2024/2025)
+-- DATI INIZIALI DI SEEDING (Admin predefinito, Anno 2024/2025, Gruppi e Spese)
 -- ==============================================================================
 
 INSERT INTO `associazione` (`id`, `denominazione`, `codice_fiscale`, `partita_iva`, `indirizzo`, `cap`, `comune`, `provincia`, `legale_rappresentante`, `telefono`, `email`, `pec`, `codice_affiliazione`, `iban`) VALUES
@@ -174,3 +188,10 @@ INSERT INTO `utenti` (`id`, `username`, `password_hash`, `nome`, `ruolo`, `is_ki
 INSERT INTO `gruppi` (`id`, `anno_id`, `nome_gruppo`, `descrizione`, `categoria`, `quota_mensile`, `giorno_scadenza_mensile`, `data_inizio`, `data_fine`, `istruttore`) VALUES
 (1, 1, 'Basket Under 14 Maschile', 'Allenamenti Lun-Mer-Ven 17:30', 'Pallacanestro Giovanile', 60.00, 10, '2024-09-01', '2025-05-31', 'Coach Valerio Mancini'),
 (2, 1, 'Volley Minivolley Promo', 'Allenamenti Mar-Gio 16:30', 'Pallavolo Avviamento', 45.00, 10, '2024-10-01', '2025-05-31', 'Istruttrice Laura Donati');
+
+INSERT INTO `spese_previsionali` (`id`, `anno_id`, `titolo`, `categoria`, `importo_mensile`, `ricorrente`, `mesi_json`, `note`) VALUES
+(1, 1, 'Affitto Palazzetto dello Sport e Pista', 'Affitto Impianti / Pista', 350.00, 1, NULL, 'Canone mensile concordato per spazi allenamento'),
+(2, 1, 'Compensi Istruttori Tecnici Qualificati', 'Compensi Tecnici / Allenatori', 450.00, 1, NULL, 'Rimborsi forfettari e compensi istruttori per corsi attivi'),
+(3, 1, 'Assicurazioni Sportive & Tesseramenti Iniziali', 'Assicurazioni', 220.00, 0, '["2024-09","2024-10"]', 'Coperture assicurative integrative obbligatorie atleti'),
+(4, 1, 'Fornitura Materiale Tecnico & Divise Sociali', 'Materiale Sportivo & Divise', 180.00, 0, '["2024-10","2024-11"]', 'Kit gara e abbigliamento sociale stagione'),
+(5, 1, 'Quota Iscrizione Gare e Trasferte Campionati', 'Gare & Trasferte', 150.00, 0, '["2025-02","2025-03","2025-04"]', 'Iscrizioni circuiti regionali e nazionali');

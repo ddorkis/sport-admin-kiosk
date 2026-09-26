@@ -119,6 +119,22 @@ $prossimeQuote = $db->query("
     </div>
 </div>
 
+<!-- Banner Previsione & Budget -->
+<div class="alert border-0 shadow-sm p-3 rounded-4 mb-4 d-flex justify-content-between align-items-center flex-wrap gap-2" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);">
+    <div class="d-flex align-items-center">
+        <div class="bg-success text-white p-2 rounded-3 me-3 shadow-sm">
+            <i class="bi bi-graph-up-arrow fs-4"></i>
+        </div>
+        <div>
+            <h6 class="fw-bold text-dark mb-0">Previsione Incassi Quote & Budget Spese Stagionali</h6>
+            <small class="text-dark text-opacity-75">Simula gli scenari di cassa, programma le uscite per impianti/istruttori e genera il prospetto per il CD.</small>
+        </div>
+    </div>
+    <a href="index.php?page=previsioni" class="btn btn-success fw-bold shadow-sm">
+        <i class="bi bi-calculator me-1"></i> Apri Analisi & Budget &rarr;
+    </a>
+</div>
+
 <!-- Tabelle Rapide -->
 <div class="row g-4">
     <!-- Prossime Scadenze -->

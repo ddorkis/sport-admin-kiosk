@@ -39,13 +39,20 @@ $sql .= " ORDER BY t.data_tesseramento DESC";
 $stmt = $db->prepare($sql);
 $stmt->execute($params);
 $tesserati = $stmt->fetchAll();
+
+// Recupera elenco persone e anni per il modal di nuovo tesseramento
+$elencoPersone = $db->query("SELECT id, nome, cognome, codice_fiscale, is_minorenne FROM persone ORDER BY cognome ASC, nome ASC")->fetchAll();
+$elencoAnni = $db->query("SELECT id, anno, attivo FROM anno ORDER BY id DESC")->fetchAll();
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div>
         <h2 class="h3 fw-bold mb-0"><i class="bi bi-card-checklist me-2 text-primary"></i>Registro Tesserati Sportivi</h2>
         <p class="text-muted small mb-0">Gestione soci tesserati, numeri di tessera e certificati medici</p>
     </div>
+    <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNuovoTesseramento">
+        <i class="bi bi-plus-lg me-1"></i> Nuovo Tesseramento
+    </button>
 </div>
 
 <!-- Filtri -->
@@ -129,6 +136,80 @@ $tesserati = $stmt->fetchAll();
             <?php endforeach; endif; ?>
         </tbody>
     </table>
+</div>
+
+<!-- MODAL: NUOVO TESSERAMENTO -->
+<div class="modal fade" id="modalNuovoTesseramento" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-card-checklist me-2"></i>Registra Nuovo Tesseramento</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="index.php?action=salva_tesseramento">
+                <div class="modal-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label fw-bold">Seleziona Persona / Atleta <span class="text-danger">*</span></label>
+                            <select name="persona_id" class="form-select" required>
+                                <option value="">-- Seleziona persona da anagrafica --</option>
+                                <?php foreach ($elencoPersone as $p): ?>
+                                    <option value="<?= $p['id'] ?>">
+                                        <?= htmlspecialchars($p['cognome'] . ' ' . $p['nome']) ?> (CF: <?= htmlspecialchars($p['codice_fiscale']) ?><?= $p['is_minorenne'] ? ' - Minorenne' : '' ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text">Se la persona non è presente, inseriscila prima in <a href="index.php?page=persone">Persone & Tutori</a>.</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Anno Sportivo <span class="text-danger">*</span></label>
+                            <select name="anno_id" class="form-select" required>
+                                <?php foreach ($elencoAnni as $a): ?>
+                                    <option value="<?= $a['id'] ?>" <?= (!empty($a['attivo']) ? 'selected' : '') ?>><?= htmlspecialchars($a['anno']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Numero di Tessera <span class="text-danger">*</span></label>
+                            <input type="text" name="numero_tessera" class="form-control font-monospace" placeholder="es. FISR-2024-0892" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Data Tesseramento <span class="text-danger">*</span></label>
+                            <input type="date" name="data_tesseramento" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Tipo Tesseramento <span class="text-danger">*</span></label>
+                            <select name="tipo_tesseramento" class="form-select" required>
+                                <option value="Agonista">Agonista</option>
+                                <option value="Non Agonista">Non Agonista</option>
+                                <option value="Promozionale">Promozionale</option>
+                                <option value="Socio / Dirigente">Socio / Dirigente</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Scadenza Certificato Medico</label>
+                            <input type="date" name="certificato_medico_scadenza" class="form-control">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Stato Tesseramento</label>
+                            <select name="stato" class="form-select">
+                                <option value="Attivo">Attivo</option>
+                                <option value="Sospeso">Sospeso</option>
+                                <option value="Scaduto">Scaduto</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="submit" class="btn btn-primary fw-bold"><i class="bi bi-check-lg me-1"></i> Conferma Tesseramento</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>

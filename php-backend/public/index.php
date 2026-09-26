@@ -82,9 +82,11 @@ $allowedPages = [
     'gruppi'         => 'gruppi.php',
     'quote'          => 'quote.php',
     'quote_scadute'  => 'quote_scadute.php',
+    'previsioni'     => 'previsioni.php',
     'pagamenti'      => 'pagamenti.php',
     'anni'           => 'anni.php',
     'utenti'         => 'utenti.php',
+    'associazione'   => 'associazione.php',
     'logout'         => 'logout.php'
 ];
 
