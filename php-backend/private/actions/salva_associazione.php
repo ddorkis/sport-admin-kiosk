@@ -1,6 +1,6 @@
 <?php
 /**
- * Salvataggio Dati Associazione Sportiva & Enti Affiliati
+ * Salvataggio Dati Associazione Sportiva, Disciplina & Enti Affiliati (FISR / EPS Multipli)
  * Posizione: /private/actions/salva_associazione.php
  */
 if (!defined('PATH_CONFIG')) {
@@ -15,6 +15,14 @@ requireAuth();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $db = getDbConnection();
 
+    // Assicura che le nuove colonne esistano nella tabella associazione
+    try {
+        $db->exec("ALTER TABLE associazione ADD COLUMN IF NOT EXISTS disciplina VARCHAR(100) NULL DEFAULT 'Pattinaggio Artistico a Rotelle'");
+        $db->exec("ALTER TABLE associazione ADD COLUMN IF NOT EXISTS codice_affiliazione_fisr VARCHAR(80) NULL DEFAULT 'FISR n. 3942'");
+        $db->exec("ALTER TABLE associazione ADD COLUMN IF NOT EXISTS registro_rasd VARCHAR(80) NULL DEFAULT 'RASD-RM-048291'");
+        $db->exec("ALTER TABLE associazione ADD COLUMN IF NOT EXISTS enti_affiliati_json TEXT NULL");
+    } catch (Exception $e) {}
+
     $denominazione = trim($_POST['denominazione'] ?? '');
     $cf = strtoupper(trim($_POST['codice_fiscale'] ?? ''));
     $piva = trim($_POST['partita_iva'] ?? '');
@@ -26,8 +34,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $telefono = trim($_POST['telefono'] ?? '');
     $email = trim($_POST['email'] ?? '');
     $pec = trim($_POST['pec'] ?? '');
-    $codiceAffiliazione = trim($_POST['codice_affiliazione'] ?? '');
     $iban = strtoupper(trim($_POST['iban'] ?? ''));
+    $disciplina = trim($_POST['disciplina'] ?? 'Pattinaggio Artistico a Rotelle');
+    $codiceFisr = trim($_POST['codice_affiliazione_fisr'] ?? '');
+    $registroRasd = trim($_POST['registro_rasd'] ?? '');
+    $entiAffiliatiJson = trim($_POST['enti_affiliati_json'] ?? '');
+
+    $codiceAffiliazione = $codiceFisr ?: trim($_POST['codice_affiliazione'] ?? '');
 
     if (empty($denominazione) || empty($cf) || empty($legaleRappresentante)) {
         header('Location: index.php?page=associazione&err=' . urlencode('Denominazione, Codice Fiscale e Legale Rappresentante sono obbligatori.'));
@@ -36,8 +49,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         $stmt = $db->prepare("
-            INSERT INTO associazione (id, denominazione, codice_fiscale, partita_iva, indirizzo, cap, comune, provincia, legale_rappresentante, telefono, email, pec, codice_affiliazione, iban)
-            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO associazione (
+                id, denominazione, codice_fiscale, partita_iva, indirizzo, cap, comune, provincia,
+                legale_rappresentante, telefono, email, pec, codice_affiliazione, iban,
+                disciplina, codice_affiliazione_fisr, registro_rasd, enti_affiliati_json
+            ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 denominazione = VALUES(denominazione),
                 codice_fiscale = VALUES(codice_fiscale),
@@ -51,14 +67,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 email = VALUES(email),
                 pec = VALUES(pec),
                 codice_affiliazione = VALUES(codice_affiliazione),
-                iban = VALUES(iban)
+                iban = VALUES(iban),
+                disciplina = VALUES(disciplina),
+                codice_affiliazione_fisr = VALUES(codice_affiliazione_fisr),
+                registro_rasd = VALUES(registro_rasd),
+                enti_affiliati_json = VALUES(enti_affiliati_json)
         ");
         $stmt->execute([
             $denominazione, $cf, $piva, $indirizzo, $cap, $comune, $provincia,
-            $legaleRappresentante, $telefono, $email, $pec, $codiceAffiliazione, $iban
+            $legaleRappresentante, $telefono, $email, $pec, $codiceAffiliazione, $iban,
+            $disciplina, $codiceFisr, $registroRasd, $entiAffiliatiJson
         ]);
 
-        header('Location: index.php?page=associazione&msg=' . urlencode('Dati associazione sportiva aggiornati con successo.'));
+        header('Location: index.php?page=associazione&msg=' . urlencode('Dati associazione sportiva, enti e modelli di stampa aggiornati con successo!'));
         exit;
     } catch (Exception $e) {
         header('Location: index.php?page=associazione&err=' . urlencode('Errore salvataggio dati associazione: ' . $e->getMessage()));

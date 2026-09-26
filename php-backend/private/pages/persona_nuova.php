@@ -265,6 +265,21 @@ if (!empty($persona['data_nascita'])) {
                         </a>
                     </div>
                 </div>
+
+                <?php if ($isEditing): ?>
+                    <div class="card border border-danger-subtle rounded-4 p-3 bg-white shadow-sm mt-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-shield-lock text-danger me-2 fs-5"></i>
+                            <h6 class="fw-bold mb-0 text-dark">Privacy & Rimozione Dati</h6>
+                        </div>
+                        <p class="small text-muted mb-2">
+                            Per archiviare, richiedere l'anonimizzazione GDPR (Art. 17) o verificare i vincoli contabili decennali:
+                        </p>
+                        <a href="index.php?page=persone&search=<?= urlencode($persona['codice_fiscale']) ?>" class="btn btn-outline-danger btn-sm fw-semibold">
+                            <i class="bi bi-shield-slash me-1"></i> Gestisci Privacy & GDPR
+                        </a>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
     </form>

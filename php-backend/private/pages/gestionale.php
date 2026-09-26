@@ -53,6 +53,9 @@ $prossimeQuote = $db->query("
         <p class="text-muted small mb-0">Controllo attività sportiva, tesseramenti e situazione quote mensili</p>
     </div>
     <div class="d-flex gap-2">
+        <a href="index.php?page=anni" class="btn btn-outline-primary fw-bold btn-sm shadow-sm" title="Gestisci Anno Sportivo">
+            <i class="bi bi-calendar-range me-1"></i> Anno: <?= htmlspecialchars($annoAttivo['anno']) ?>
+        </a>
         <a href="index.php?page=persona_nuova" class="btn btn-primary fw-bold btn-sm shadow-sm">
             <i class="bi bi-person-plus-fill me-1"></i> Nuova Persona
         </a>

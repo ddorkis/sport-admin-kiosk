@@ -49,6 +49,9 @@ export interface Persona {
   tutore_relazione?: 'Genitore' | 'Madre' | 'Padre' | 'Tutore Legale' | 'Altro';
   note?: string;
   data_creazione: string;
+  attivo?: boolean; // Se false = persona archiviata / nascosta
+  anonimizzato_gdpr?: boolean; // Dati personali anonimizzati ex Art. 17 GDPR
+  data_anonimizzazione?: string;
 }
 
 export interface Anno {

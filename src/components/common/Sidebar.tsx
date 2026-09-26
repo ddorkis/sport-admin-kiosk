@@ -271,7 +271,8 @@ export const Sidebar: React.FC<Props> = ({
                 (item.id === 'tesserati' && activeTab === 'nuovo_tesseramento') ||
                 (item.id === 'gruppi' && (activeTab === 'nuovo_gruppo' || activeTab === 'iscrizione_gruppo')) ||
                 (item.id === 'pagamenti' && activeTab === 'nuovo_pagamento') ||
-                (item.id === 'utenti' && activeTab === 'nuovo_utente');
+                (item.id === 'utenti' && activeTab === 'nuovo_utente') ||
+                (item.id === 'previsioni' && (activeTab === 'nuova_spesa' || activeTab === 'sinottico_cd'));
               return (
                 <li className="nav-item" key={item.id}>
                   <button

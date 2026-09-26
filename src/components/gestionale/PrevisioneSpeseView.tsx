@@ -12,6 +12,8 @@ interface Props {
   onSaveSpesa: (spesa: Omit<SpesaPrevisionale, 'id'>, idToEdit?: number) => void;
   onDeleteSpesa: (id: number) => void;
   onNavigateTab: (tab: string, filter?: string) => void;
+  onOpenNuovaSpesa?: (spesaToEdit?: SpesaPrevisionale | null) => void;
+  onOpenSinotticoCd?: () => void;
 }
 
 const CATEGORIE_SPESA: CategoriaSpesa[] = [
@@ -55,7 +57,9 @@ export const PrevisioneSpeseView: React.FC<Props> = ({
   associazione,
   onSaveSpesa,
   onDeleteSpesa,
-  onNavigateTab
+  onNavigateTab,
+  onOpenNuovaSpesa,
+  onOpenSinotticoCd
 }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSpesa, setEditingSpesa] = useState<SpesaPrevisionale | null>(null);
@@ -261,18 +265,30 @@ export const PrevisioneSpeseView: React.FC<Props> = ({
           </button>
 
           <button
-            className="btn btn-sm btn-outline-dark"
-            onClick={handleStampaProspetto}
-            title="Stampa prospetto previsionale A4 per il Consiglio Direttivo"
+            className="btn btn-sm btn-outline-dark fw-semibold"
+            onClick={() => {
+              if (onOpenSinotticoCd) {
+                onOpenSinotticoCd();
+              } else {
+                setStampaCdModalOpen(true);
+              }
+            }}
+            title="Visualizza sinottico completo per il Consiglio Direttivo"
           >
-            <i className="bi bi-printer me-1"></i> Stampa Prospetto CD
+            <i className="bi bi-file-earmark-spreadsheet-fill text-primary me-1"></i> Sinottico per Consiglio Direttivo
           </button>
 
           <button
             className="btn btn-sm btn-primary fw-bold shadow-sm"
-            onClick={handleOpenNuovaSpesa}
+            onClick={() => {
+              if (onOpenNuovaSpesa) {
+                onOpenNuovaSpesa(null);
+              } else {
+                handleOpenNuovaSpesa();
+              }
+            }}
           >
-            <i className="bi bi-plus-circle me-1"></i> Aggiungi Voce di Spesa
+            <i className="bi bi-plus-circle me-1"></i> Nuova Spesa a Budget
           </button>
         </div>
       </div>
@@ -608,7 +624,13 @@ export const PrevisioneSpeseView: React.FC<Props> = ({
 
               <button
                 className="btn btn-sm btn-outline-danger fw-bold"
-                onClick={handleOpenNuovaSpesa}
+                onClick={() => {
+                  if (onOpenNuovaSpesa) {
+                    onOpenNuovaSpesa(null);
+                  } else {
+                    handleOpenNuovaSpesa();
+                  }
+                }}
               >
                 <i className="bi bi-plus-lg me-1"></i> Nuova Spesa
               </button>
@@ -630,7 +652,19 @@ export const PrevisioneSpeseView: React.FC<Props> = ({
                     {spese.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="text-center py-5 text-muted">
-                          Nessuna voce di spesa inserita. Clicca su "Aggiungi Voce di Spesa" per iniziare.
+                          <p className="mb-3">Nessuna voce di spesa inserita nel budget previsionale.</p>
+                          <button
+                            className="btn btn-outline-danger btn-sm fw-bold"
+                            onClick={() => {
+                              if (onOpenNuovaSpesa) {
+                                onOpenNuovaSpesa(null);
+                              } else {
+                                handleOpenNuovaSpesa();
+                              }
+                            }}
+                          >
+                            <i className="bi bi-plus-circle me-1"></i> Aggiungi Nuova Spesa a Budget
+                          </button>
                         </td>
                       </tr>
                     ) : (
@@ -678,7 +712,13 @@ export const PrevisioneSpeseView: React.FC<Props> = ({
                               <div className="btn-group btn-group-sm">
                                 <button
                                   className="btn btn-outline-secondary"
-                                  onClick={() => handleEditSpesa(s)}
+                                  onClick={() => {
+                                    if (onOpenNuovaSpesa) {
+                                      onOpenNuovaSpesa(s);
+                                    } else {
+                                      handleEditSpesa(s);
+                                    }
+                                  }}
                                   title="Modifica voce"
                                 >
                                   <i className="bi bi-pencil"></i>

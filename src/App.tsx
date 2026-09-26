@@ -50,6 +50,8 @@ import { NuovoPagamentoPage } from './components/gestionale/NuovoPagamentoPage';
 import { NuovoGruppoPage } from './components/gestionale/NuovoGruppoPage';
 import { NuovaIscrizioneGruppoPage } from './components/gestionale/NuovaIscrizioneGruppoPage';
 import { NuovoUtentePage } from './components/gestionale/NuovoUtentePage';
+import { NuovaSpesaPage } from './components/gestionale/NuovaSpesaPage';
+import { SinotticoConsiglioDirettivoPage } from './components/gestionale/SinotticoConsiglioDirettivoPage';
 
 // Auth
 import { LoginPage } from './components/auth/LoginPage';
@@ -60,6 +62,7 @@ export default function App() {
   const [currentMode, setCurrentMode] = useState<'kiosk' | 'gestionale'>('gestionale');
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [quoteFilter, setQuoteFilter] = useState<string | undefined>(undefined);
+  const [spesaToEdit, setSpesaToEdit] = useState<SpesaPrevisionale | null>(null);
 
   // Modali state
   const [isNuovaPersonaOpen, setIsNuovaPersonaOpen] = useState(false);
@@ -251,6 +254,67 @@ export default function App() {
     }));
 
     showToast(`Dati anagrafici di ${updatedPersona.cognome} ${updatedPersona.nome} aggiornati con successo!`);
+  };
+
+  // Eliminazione Definitiva Persona (solo se non ha pagamenti/ricevute fiscali)
+  const handleDeletePersona = (personaId: number) => {
+    const tessIds = data.tesserati.filter((t) => t.persona_id === personaId).map((t) => t.id);
+    const hasPagamenti = data.pagamenti.some((p) => tessIds.includes(p.tesserato_id));
+    if (hasPagamenti) {
+      showToast('Impossibile eliminare: ricevute fiscali presenti (obbligo conservazione 10 anni ex art. 2220 C.C.). Procedi con Anonimizzazione GDPR.');
+      return;
+    }
+
+    setData((prev) => ({
+      ...prev,
+      persone: prev.persone.filter((p) => p.id !== personaId),
+      tesserati: prev.tesserati.filter((t) => t.persona_id !== personaId),
+      gruppi_tesserati: prev.gruppi_tesserati.filter((gt) => !tessIds.includes(gt.tesserato_id)),
+      quote: prev.quote.filter((q) => !tessIds.includes(q.tesserato_id))
+    }));
+    showToast('Anagrafica eliminata definitivamente dal sistema.');
+  };
+
+  // Archiviazione / Ripristino Persona (Soft Delete / Nascondi)
+  const handleToggleArchivePersona = (personaId: number, archive: boolean) => {
+    setData((prev) => ({
+      ...prev,
+      persone: prev.persone.map((p) => (p.id === personaId ? { ...p, attivo: !archive } : p))
+    }));
+    showToast(archive ? 'Anagrafica archiviata (nascosta dalle liste ordinarie e dal Kiosk).' : 'Anagrafica ripristinata tra i soci attivi!');
+  };
+
+  // Anonimizzazione Dati Personali a norma GDPR (Art. 17 Diritto all\'Oblio con conservazione ricevute ex art. 2220 C.C.)
+  const handleAnonymizePersona = (personaId: number) => {
+    setData((prev) => ({
+      ...prev,
+      persone: prev.persone.map((p) => {
+        if (p.id !== personaId) return p;
+        return {
+          ...p,
+          nome: 'ANONIMO',
+          cognome: `GDPR #${p.id}`,
+          codice_fiscale: `ANON${String(p.id).padStart(12, '0')}`,
+          luogo_nascita: '',
+          indirizzo: '',
+          citta: '',
+          telefono: '',
+          email: '',
+          is_minorenne: false,
+          tutore_nome: undefined,
+          tutore_cognome: undefined,
+          tutore_cf: undefined,
+          tutore_telefono: undefined,
+          tutore_email: undefined,
+          tutore_relazione: undefined,
+          note: `Dati personali e dati tutore cancellati a norma dell'Art. 17 GDPR (Diritto all'Oblio). Estremi contabili conservati ai sensi dell'art. 2220 C.C. in data ${new Date().toISOString().substring(0, 10)}.`,
+          attivo: false,
+          anonimizzato_gdpr: true,
+          data_anonimizzazione: new Date().toISOString()
+        };
+      })
+    }));
+    showToast("Dati personali e tutore anonimizzati ex Art. 17 GDPR. Ricevute contabili conservate a norma di legge.");
   };
 
   // Gestione Tesseramento
@@ -682,6 +746,9 @@ export default function App() {
             {activeTab === 'persone' && (
               <PersoneView
                 persone={data.persone}
+                tesserati={data.tesserati}
+                pagamenti={data.pagamenti}
+                quote={data.quote}
                 onOpenNuovaPersona={() => {
                   setPersonaToEdit(null);
                   setActiveTab('nuova_persona');
@@ -694,6 +761,9 @@ export default function App() {
                   setPersonaToEdit(p);
                   setActiveTab('nuova_persona');
                 }}
+                onDeletePermanent={handleDeletePersona}
+                onToggleArchive={handleToggleArchivePersona}
+                onAnonymizeGdpr={handleAnonymizePersona}
               />
             )}
 
@@ -855,6 +925,40 @@ export default function App() {
                   if (filter) setQuoteFilter(filter);
                   setActiveTab(tab);
                 }}
+                onOpenNuovaSpesa={(spesa) => {
+                  setSpesaToEdit(spesa || null);
+                  setActiveTab('nuova_spesa');
+                }}
+                onOpenSinotticoCd={() => {
+                  setActiveTab('sinottico_cd');
+                }}
+              />
+            )}
+
+            {activeTab === 'nuova_spesa' && (
+              <NuovaSpesaPage
+                initialSpesa={spesaToEdit}
+                annoAttivo={annoAttivo}
+                onBack={() => {
+                  setSpesaToEdit(null);
+                  setActiveTab('previsioni');
+                }}
+                onSave={(spesa, idToEdit) => {
+                  handleSaveSpesa(spesa, idToEdit);
+                  setSpesaToEdit(null);
+                  setActiveTab('previsioni');
+                }}
+              />
+            )}
+
+            {activeTab === 'sinottico_cd' && (
+              <SinotticoConsiglioDirettivoPage
+                associazione={data.associazione}
+                annoAttivo={annoAttivo}
+                quote={data.quote}
+                spese={data.spese || []}
+                gruppi={data.gruppi}
+                onBack={() => setActiveTab('previsioni')}
               />
             )}
 

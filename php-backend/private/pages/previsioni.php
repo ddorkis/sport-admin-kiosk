@@ -6,19 +6,57 @@
 require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/header.php';
 $db = getDbConnection();
 
-// Recupera anno attivo e dati associazione
-$annoAttivo = $db->query("SELECT * FROM anno WHERE attivo = 1 LIMIT 1")->fetch() ?: ['id' => 1, 'anno' => '2024/2025'];
-$annoId = (int)$annoAttivo['id'];
-$associazione = $db->query("SELECT * FROM associazione WHERE id = 1 LIMIT 1")->fetch() ?: [
-    'denominazione' => 'A.S.D. Polisportiva Aurora',
-    'codice_fiscale' => '97854120584',
-    'partita_iva' => '04859620581',
-    'indirizzo' => 'Via dello Sport, 24',
-    'cap' => '00153',
-    'comune' => 'Roma',
-    'provincia' => 'RM',
-    'legale_rappresentante' => 'Alessandro Bianchi'
-];
+// Assicura l'esistenza della tabella spese_previsionali nel database MariaDB
+try {
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS `spese_previsionali` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `anno_id` INT NOT NULL,
+            `titolo` VARCHAR(150) NOT NULL,
+            `categoria` VARCHAR(80) NOT NULL DEFAULT 'Altro',
+            `importo_mensile` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+            `ricorrente` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 se spesa attiva tutti i mesi della stagione',
+            `mesi_json` TEXT NULL COMMENT 'JSON array dei mesi specifici se non ricorrente',
+            `note` TEXT NULL,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX `idx_spese_anno` (`anno_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ");
+} catch (Exception $e) {}
+
+// Recupera anno attivo e tutti gli anni per selettore
+$annoAttivo = null;
+try {
+    $annoAttivo = $db->query("SELECT * FROM anno WHERE attivo = 1 LIMIT 1")->fetch();
+} catch (Exception $e) {}
+if (!$annoAttivo) {
+    $annoAttivo = ['id' => 1, 'anno' => '2024/2025', 'data_inizio' => '2024-09-01', 'data_fine' => '2025-06-30'];
+}
+$annoId = (int)($annoAttivo['id'] ?? 1);
+
+$tuttiAnni = [];
+try {
+    $tuttiAnni = $db->query("SELECT id, anno, attivo FROM anno ORDER BY data_inizio DESC")->fetchAll() ?: [];
+} catch (Exception $e) {}
+
+// Recupera dati associazione
+$associazione = null;
+try {
+    $associazione = $db->query("SELECT * FROM associazione WHERE id = 1 LIMIT 1")->fetch();
+} catch (Exception $e) {}
+if (!$associazione) {
+    $associazione = [
+        'denominazione' => 'A.S.D. Polisportiva Aurora',
+        'codice_fiscale' => '97854120584',
+        'partita_iva' => '04859620581',
+        'indirizzo' => 'Via dello Sport, 24',
+        'cap' => '00153',
+        'comune' => 'Roma',
+        'provincia' => 'RM',
+        'legale_rappresentante' => 'Alessandro Bianchi',
+        'disciplina' => 'Pattinaggio Artistico a Rotelle'
+    ];
+}
 
 // Categorie e colori spese
 $categorieSpesaConfig = [
@@ -32,19 +70,49 @@ $categorieSpesaConfig = [
     'Altro' => ['badge' => 'bg-light text-dark border', 'icon' => 'bi-three-dots']
 ];
 
-// Recupera spese previsionali a database
-$stmtSpese = $db->prepare("SELECT * FROM spese_previsionali WHERE anno_id = ? ORDER BY id ASC");
-$stmtSpese->execute([$annoId]);
-$speseList = $stmtSpese->fetchAll();
+// Recupera spese previsionali a database per l'anno selezionato
+$speseList = [];
+try {
+    $stmtSpese = $db->prepare("SELECT * FROM spese_previsionali WHERE anno_id = ? ORDER BY id ASC");
+    $stmtSpese->execute([$annoId]);
+    $speseList = $stmtSpese->fetchAll() ?: [];
+} catch (Exception $e) {}
 
-// Mesi della stagione sportiva (default Settembre a Giugno)
-$mesiStagione = [
-    '2024-09', '2024-10', '2024-11', '2024-12',
-    '2025-01', '2025-02', '2025-03', '2025-04', '2025-05', '2025-06'
-];
+// Calcolo dinamico dei mesi della stagione sportiva (da data_inizio a data_fine dell'anno)
+$mesiStagione = [];
+if (!empty($annoAttivo['data_inizio']) && !empty($annoAttivo['data_fine'])) {
+    try {
+        $cur = new DateTime($annoAttivo['data_inizio']);
+        $end = new DateTime($annoAttivo['data_fine']);
+        $end->modify('first day of next month');
+        while ($cur < $end) {
+            $mesiStagione[] = $cur->format('Y-m');
+            $cur->modify('+1 month');
+        }
+    } catch (Exception $e) {}
+}
+if (empty($mesiStagione)) {
+    $mesiStagione = [
+        '2024-09', '2024-10', '2024-11', '2024-12',
+        '2025-01', '2025-02', '2025-03', '2025-04', '2025-05', '2025-06'
+    ];
+}
 
-// Integra con eventuali mesi trovati nelle quote
-$mesiQuote = $db->query("SELECT DISTINCT mese_riferimento FROM quote WHERE mese_riferimento IS NOT NULL ORDER BY mese_riferimento ASC")->fetchAll(PDO::FETCH_COLUMN);
+// Integra con eventuali mesi trovati nelle quote del periodo
+$mesiQuote = [];
+try {
+    $stmtMQ = $db->prepare("
+        SELECT DISTINCT q.mese_riferimento 
+        FROM quote q
+        LEFT JOIN tesserati t ON q.tesserato_id = t.id
+        WHERE q.mese_riferimento IS NOT NULL 
+          AND (t.anno_id = ? OR t.anno_id IS NULL)
+        ORDER BY q.mese_riferimento ASC
+    ");
+    $stmtMQ->execute([$annoId]);
+    $mesiQuote = $stmtMQ->fetchAll(PDO::FETCH_COLUMN) ?: [];
+} catch (Exception $e) {}
+
 $tuttiMesi = array_values(array_unique(array_merge($mesiStagione, $mesiQuote)));
 sort($tuttiMesi);
 
@@ -71,24 +139,36 @@ $totaleResiduoReale = 0;
 $totaleUscitePreviste = 0;
 
 foreach ($tuttiMesi as $m) {
-    // Quote del mese
-    $stmtQ = $db->prepare("
-        SELECT 
-            COUNT(*) AS count_quote,
-            COALESCE(SUM(importo), 0) AS entrate,
-            COALESCE(SUM(importo_pagato), 0) AS incassato,
-            COALESCE(SUM(importo - importo_pagato), 0) AS residuo
-        FROM quote
-        WHERE mese_riferimento = ? AND stato != 'annullata'
-    ");
-    $stmtQ->execute([$m]);
-    $qData = $stmtQ->fetch();
+    // Quote del mese filtrate per anno o periodo
+    $entrateMese = 0;
+    $incassatoMese = 0;
+    $residuoMese = 0;
+    $countQuote = 0;
 
-    $entrateMese = (float)$qData['entrate'];
-    $incassatoMese = (float)$qData['incassato'];
-    $residuoMese = (float)$qData['residuo'];
+    try {
+        $stmtQ = $db->prepare("
+            SELECT 
+                COUNT(q.id) AS count_quote,
+                COALESCE(SUM(q.importo), 0) AS entrate,
+                COALESCE(SUM(q.importo_pagato), 0) AS incassato,
+                COALESCE(SUM(q.importo - q.importo_pagato), 0) AS residuo
+            FROM quote q
+            LEFT JOIN tesserati t ON q.tesserato_id = t.id
+            WHERE q.mese_riferimento = ? 
+              AND (t.anno_id = ? OR t.anno_id IS NULL)
+              AND q.stato != 'annullata'
+        ");
+        $stmtQ->execute([$m, $annoId]);
+        $qData = $stmtQ->fetch();
+        if ($qData) {
+            $countQuote = (int)$qData['count_quote'];
+            $entrateMese = (float)$qData['entrate'];
+            $incassatoMese = (float)$qData['incassato'];
+            $residuoMese = (float)$qData['residuo'];
+        }
+    } catch (Exception $e) {}
 
-    // Spese del mese
+    // Spese del mese per questo anno
     $speseMeseVoci = [];
     $usciteMese = 0;
     foreach ($speseList as $spesa) {
@@ -103,11 +183,11 @@ foreach ($tuttiMesi as $m) {
         }
 
         if ($includeSpesa) {
-            $importoSpesa = (float)$spesa['importo_mensile'];
+            $importoSpesa = (float)($spesa['importo_mensile'] ?? 0);
             $usciteMese += $importoSpesa;
             $speseMeseVoci[] = [
-                'titolo' => $spesa['titolo'],
-                'categoria' => $spesa['categoria'],
+                'titolo' => $spesa['titolo'] ?? 'Spesa',
+                'categoria' => $spesa['categoria'] ?? 'Altro',
                 'importo' => $importoSpesa
             ];
         }
@@ -124,7 +204,7 @@ foreach ($tuttiMesi as $m) {
     $pianoMesi[] = [
         'mese' => $m,
         'label' => getNomeMeseIT($m),
-        'count_quote' => (int)$qData['count_quote'],
+        'count_quote' => $countQuote,
         'entrate' => $entrateMese,
         'incassato' => $incassatoMese,
         'residuo' => $residuoMese,
@@ -145,16 +225,28 @@ $tassoCopertura = $totaleUscitePreviste > 0 ? round(($totaleEntratePreviste / $t
             <i class="bi bi-graph-up-arrow text-success me-2"></i> Previsione Incassi Quote & Budget Spese
         </h2>
         <p class="text-muted small mb-0">
-            Pianificazione economico-finanziaria per la stagione <?= htmlspecialchars($annoAttivo['anno']) ?>, piano di cassa mensile e simulatore di bilancio
+            Pianificazione economico-finanziaria per la stagione <strong><?= htmlspecialchars($annoAttivo['anno']) ?></strong>, piano di cassa mensile e simulatore di bilancio
         </p>
     </div>
-    <div class="d-flex gap-2">
-        <button class="btn btn-outline-secondary shadow-sm" data-bs-toggle="modal" data-bs-target="#modalStampaCd">
-            <i class="bi bi-printer me-1"></i> Prospetto per Consiglio Direttivo
-        </button>
-        <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNuovaSpesa">
-            <i class="bi bi-plus-lg me-1"></i> Aggiungi Spesa Previsionale
-        </button>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <!-- Selettore Anno Rapido -->
+        <div class="input-group input-group-sm shadow-sm" style="width: auto;">
+            <span class="input-group-text bg-white fw-bold"><i class="bi bi-calendar-range me-1 text-primary"></i> Stagione:</span>
+            <select class="form-select form-select-sm fw-bold" onchange="window.location.href='index.php?action=salva_anno&switch_anno_id='+this.value+'&return_page=previsioni'">
+                <?php foreach ($tuttiAnni as $an): ?>
+                    <option value="<?= $an['id'] ?>" <?= ((int)$an['id'] === $annoId ? 'selected' : '') ?>>
+                        <?= htmlspecialchars($an['anno']) ?> <?= (!empty($an['attivo']) ? ' (Attivo)' : '') ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <a href="index.php?page=sinottico_consiglio&anno_id=<?= $annoId ?>" class="btn btn-outline-dark btn-sm fw-semibold shadow-sm">
+            <i class="bi bi-file-earmark-spreadsheet-fill text-primary me-1"></i> Sinottico per Consiglio Direttivo
+        </a>
+        <a href="index.php?page=spesa_nuova&anno_id=<?= $annoId ?>" class="btn btn-primary btn-sm fw-bold shadow-sm">
+            <i class="bi bi-plus-lg me-1"></i> Nuova Spesa a Budget
+        </a>
     </div>
 </div>
 
@@ -269,7 +361,7 @@ $tassoCopertura = $totaleUscitePreviste > 0 ? round(($totaleEntratePreviste / $t
 <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden mb-4">
     <div class="card-header bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center">
         <div>
-            <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-calendar3 me-2 text-primary"></i>Piano di Cassa & Flussi Mensili</h5>
+            <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-calendar3 me-2 text-primary"></i>Piano di Cassa & Flussi Mensili (<?= htmlspecialchars($annoAttivo['anno']) ?>)</h5>
             <small class="text-muted">Entrate quote, uscite spese e progressivo di cassa cumulativo per tutta la stagione</small>
         </div>
     </div>
@@ -286,7 +378,9 @@ $tassoCopertura = $totaleUscitePreviste > 0 ? round(($totaleEntratePreviste / $t
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($pianoMesi as $idx => $pm): ?>
+                <?php if (empty($pianoMesi)): ?>
+                    <tr><td colspan="6" class="text-center py-4 text-muted">Nessun mese configurato per la stagione.</td></tr>
+                <?php else: foreach ($pianoMesi as $idx => $pm): ?>
                     <tr data-base-entrate="<?= $pm['entrate'] ?>" data-base-uscite="<?= $pm['uscite'] ?>">
                         <td>
                             <strong class="text-dark"><?= htmlspecialchars($pm['label']) ?></strong>
@@ -323,7 +417,7 @@ $tassoCopertura = $totaleUscitePreviste > 0 ? round(($totaleEntratePreviste / $t
                             </strong>
                         </td>
                     </tr>
-                <?php endforeach; ?>
+                <?php endforeach; endif; ?>
             </tbody>
             <tfoot class="table-light fw-bold border-top">
                 <tr>
@@ -347,12 +441,12 @@ $tassoCopertura = $totaleUscitePreviste > 0 ? round(($totaleEntratePreviste / $t
 <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden mb-4">
     <div class="card-header bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center">
         <div>
-            <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-receipt me-2 text-danger"></i>Voci di Spesa Previsionali a Budget</h5>
+            <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-receipt me-2 text-danger"></i>Voci di Spesa Previsionali a Budget (<?= htmlspecialchars($annoAttivo['anno']) ?>)</h5>
             <small class="text-muted">Elenco dei costi fissi e variabili programmati per la stagione</small>
         </div>
-        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuovaSpesa">
-            <i class="bi bi-plus-lg me-1"></i> Aggiungi Spesa
-        </button>
+        <a href="index.php?page=spesa_nuova&anno_id=<?= $annoId ?>" class="btn btn-sm btn-outline-danger fw-bold">
+            <i class="bi bi-plus-lg me-1"></i> Nuova Spesa
+        </a>
     </div>
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
@@ -368,10 +462,18 @@ $tassoCopertura = $totaleUscitePreviste > 0 ? round(($totaleEntratePreviste / $t
             </thead>
             <tbody>
                 <?php if (empty($speseList)): ?>
-                    <tr><td colspan="6" class="text-center py-4 text-muted">Nessuna voce di spesa inserita a budget.</td></tr>
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">
+                            <p class="mb-2">Nessuna voce di spesa inserita a budget per questa stagione.</p>
+                            <a href="index.php?page=spesa_nuova&anno_id=<?= $annoId ?>" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-plus-circle me-1"></i> Inserisci la prima spesa a budget
+                            </a>
+                        </td>
+                    </tr>
                 <?php else: foreach ($speseList as $sp): ?>
                     <?php 
-                        $cfgCat = $categorieSpesaConfig[$sp['categoria']] ?? ['badge' => 'bg-secondary text-white', 'icon' => 'bi-tag'];
+                        $catName = $sp['categoria'] ?? 'Altro';
+                        $cfgCat = $categorieSpesaConfig[$catName] ?? ['badge' => 'bg-secondary text-white', 'icon' => 'bi-tag'];
                         $mesiSpec = !empty($sp['mesi_json']) ? json_decode($sp['mesi_json'], true) : [];
                     ?>
                     <tr>
@@ -380,30 +482,35 @@ $tassoCopertura = $totaleUscitePreviste > 0 ? round(($totaleEntratePreviste / $t
                         </td>
                         <td>
                             <span class="badge <?= $cfgCat['badge'] ?> px-2 py-1">
-                                <i class="bi <?= $cfgCat['icon'] ?> me-1"></i> <?= htmlspecialchars($sp['categoria']) ?>
+                                <i class="bi <?= $cfgCat['icon'] ?> me-1"></i> <?= htmlspecialchars($catName) ?>
                             </span>
                         </td>
                         <td>
-                            <strong class="text-danger fs-6">€ <?= number_format($sp['importo_mensile'], 2, ',', '.') ?></strong>
-                            <small class="text-muted"><?= $sp['ricorrente'] ? '/ mese' : '/ occorrenza' ?></small>
+                            <strong class="text-danger fs-6">€ <?= number_format((float)$sp['importo_mensile'], 2, ',', '.') ?></strong>
+                            <small class="text-muted"><?= !empty($sp['ricorrente']) ? '/ mese' : '/ occorrenza' ?></small>
                         </td>
                         <td>
-                            <?php if ($sp['ricorrente']): ?>
+                            <?php if (!empty($sp['ricorrente'])): ?>
                                 <span class="badge bg-success-subtle text-success">Tutti i mesi (Ricorrente)</span>
                             <?php else: ?>
-                                <span class="badge bg-info-subtle text-info"><?= count($mesiSpec) ?> mesi: <?= implode(', ', $mesiSpec) ?></span>
+                                <span class="badge bg-info-subtle text-info"><?= is_array($mesiSpec) ? count($mesiSpec) : 0 ?> mesi: <?= is_array($mesiSpec) ? implode(', ', $mesiSpec) : '' ?></span>
                             <?php endif; ?>
                         </td>
                         <td>
                             <span class="small text-muted"><?= htmlspecialchars($sp['note'] ?: '-') ?></span>
                         </td>
                         <td class="text-end">
-                            <form method="POST" action="index.php?action=elimina_spesa" class="d-inline" onsubmit="return confirm('Eliminare questa spesa previsionale dal budget?');">
-                                <input type="hidden" name="id" value="<?= $sp['id'] ?>">
-                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Elimina Spesa">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </form>
+                            <div class="btn-group btn-group-sm">
+                                <a href="index.php?page=spesa_nuova&id=<?= $sp['id'] ?>&anno_id=<?= $annoId ?>" class="btn btn-outline-secondary" title="Modifica Spesa">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form method="POST" action="index.php?action=elimina_spesa" class="d-inline" onsubmit="return confirm('Eliminare questa spesa previsionale dal budget?');">
+                                    <input type="hidden" name="id" value="<?= $sp['id'] ?>">
+                                    <button type="submit" class="btn btn-outline-danger" title="Elimina Spesa">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                 <?php endforeach; endif; ?>
@@ -417,7 +524,7 @@ $tassoCopertura = $totaleUscitePreviste > 0 ? round(($totaleEntratePreviste / $t
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content border-0 rounded-4 shadow">
             <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title fw-bold"><i class="bi bi-plus-circle me-2"></i>Aggiungi Voce di Spesa a Budget</h5>
+                <h5 class="modal-title fw-bold"><i class="bi bi-plus-circle me-2"></i>Aggiungi Voce di Spesa a Budget (<?= htmlspecialchars($annoAttivo['anno']) ?>)</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" action="index.php?action=salva_spesa">
@@ -496,7 +603,7 @@ $tassoCopertura = $totaleUscitePreviste > 0 ? round(($totaleEntratePreviste / $t
                         <div>
                             <h4 class="fw-bold mb-1"><?= htmlspecialchars($associazione['denominazione']) ?></h4>
                             <div class="small text-muted"><?= htmlspecialchars($associazione['indirizzo']) ?> - <?= htmlspecialchars($associazione['cap']) ?> <?= htmlspecialchars($associazione['comune']) ?> (<?= htmlspecialchars($associazione['provincia']) ?>)</div>
-                            <div class="small text-muted">C.F.: <?= htmlspecialchars($associazione['codice_fiscale']) ?> <?= $associazione['partita_iva'] ? ' | P.IVA: ' . htmlspecialchars($associazione['partita_iva']) : '' ?></div>
+                            <div class="small text-muted">C.F.: <?= htmlspecialchars($associazione['codice_fiscale']) ?> <?= !empty($associazione['partita_iva']) ? ' | P.IVA: ' . htmlspecialchars($associazione['partita_iva']) : '' ?></div>
                         </div>
                         <div class="text-end">
                             <div class="badge bg-primary fs-6 px-3 py-2">Bilancio Previsionale <?= htmlspecialchars($annoAttivo['anno']) ?></div>
@@ -632,57 +739,75 @@ function aggiornaSimulatore() {
         totE += simE;
         totU += simU;
 
-        r.querySelector('.col-entrate').textContent = '€ ' + simE.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        r.querySelector('.col-uscite').textContent = '€ ' + simU.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        var elE = r.querySelector('.col-entrate');
+        if (elE) elE.textContent = '€ ' + simE.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        var elU = r.querySelector('.col-uscite');
+        if (elU) elU.textContent = '€ ' + simU.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         
         var saldoEl = r.querySelector('.col-saldo');
-        saldoEl.textContent = (saldo >= 0 ? '+' : '') + '€ ' + saldo.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        saldoEl.className = 'fw-bold col-saldo ' + (saldo >= 0 ? 'text-success' : 'text-danger');
+        if (saldoEl) {
+            saldoEl.textContent = (saldo >= 0 ? '+' : '') + '€ ' + saldo.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            saldoEl.className = 'fw-bold col-saldo ' + (saldo >= 0 ? 'text-success' : 'text-danger');
+        }
 
         var progEl = r.querySelector('.col-progressivo');
-        progEl.textContent = '€ ' + prog.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        progEl.className = 'col-progressivo ' + (prog >= 0 ? 'text-primary' : 'text-danger');
+        if (progEl) {
+            progEl.textContent = '€ ' + prog.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            progEl.className = 'col-progressivo ' + (prog >= 0 ? 'text-primary' : 'text-danger');
+        }
     });
 
     var saldoFinale = totE - totU;
     var tasso = totU > 0 ? Math.round((totE / totU) * 100) : 100;
 
     // Aggiorna KPI
-    document.getElementById('kpiEntrate').textContent = totE.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    document.getElementById('kpiUscite').textContent = totU.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    document.getElementById('kpiSaldoVal').textContent = saldoFinale.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    document.getElementById('kpiCopertura').textContent = tasso;
+    var kE = document.getElementById('kpiEntrate');
+    if (kE) kE.textContent = totE.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    var kU = document.getElementById('kpiUscite');
+    if (kU) kU.textContent = totU.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    var kS = document.getElementById('kpiSaldoVal');
+    if (kS) kS.textContent = saldoFinale.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    var kC = document.getElementById('kpiCopertura');
+    if (kC) kC.textContent = tasso;
 
     var saldoText = document.getElementById('kpiSaldoText');
     var saldoBadge = document.getElementById('kpiSaldoBadge');
     var saldoIconBox = document.getElementById('kpiSaldoIconBox');
     var saldoIcon = document.getElementById('kpiSaldoIcon');
 
-    if (saldoFinale >= 0) {
-        saldoText.className = 'fw-bold mb-0 text-success';
-        saldoBadge.className = 'badge bg-success-subtle text-success';
-        saldoBadge.textContent = 'Attivo di Cassa';
-        saldoIconBox.className = 'p-3 rounded-4 me-3 bg-success-subtle text-success';
-        saldoIcon.className = 'bi bi-shield-check fs-3';
-    } else {
-        saldoText.className = 'fw-bold mb-0 text-danger';
-        saldoBadge.className = 'badge bg-danger-subtle text-danger';
-        saldoBadge.textContent = 'Disavanzo Previsto';
-        saldoIconBox.className = 'p-3 rounded-4 me-3 bg-danger-subtle text-danger';
-        saldoIcon.className = 'bi bi-exclamation-diamond fs-3';
+    if (saldoText && saldoBadge && saldoIconBox && saldoIcon) {
+        if (saldoFinale >= 0) {
+            saldoText.className = 'fw-bold mb-0 text-success';
+            saldoBadge.className = 'badge bg-success-subtle text-success';
+            saldoBadge.textContent = 'Attivo di Cassa';
+            saldoIconBox.className = 'p-3 rounded-4 me-3 bg-success-subtle text-success';
+            saldoIcon.className = 'bi bi-shield-check fs-3';
+        } else {
+            saldoText.className = 'fw-bold mb-0 text-danger';
+            saldoBadge.className = 'badge bg-danger-subtle text-danger';
+            saldoBadge.textContent = 'Disavanzo Previsto';
+            saldoIconBox.className = 'p-3 rounded-4 me-3 bg-danger-subtle text-danger';
+            saldoIcon.className = 'bi bi-exclamation-diamond fs-3';
+        }
     }
 
     // Aggiorna Footer Tabella
-    document.getElementById('footEntrate').textContent = '€ ' + totE.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    document.getElementById('footUscite').textContent = '€ ' + totU.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    var fE = document.getElementById('footEntrate');
+    if (fE) fE.textContent = '€ ' + totE.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    var fU = document.getElementById('footUscite');
+    if (fU) fU.textContent = '€ ' + totU.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     
     var footSaldo = document.getElementById('footSaldo');
-    footSaldo.textContent = (saldoFinale >= 0 ? '+' : '') + '€ ' + saldoFinale.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    footSaldo.className = (saldoFinale >= 0 ? 'text-success' : 'text-danger');
+    if (footSaldo) {
+        footSaldo.textContent = (saldoFinale >= 0 ? '+' : '') + '€ ' + saldoFinale.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        footSaldo.className = (saldoFinale >= 0 ? 'text-success' : 'text-danger');
+    }
 
     var footProg = document.getElementById('footProgressivo');
-    footProg.textContent = '€ ' + saldoFinale.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    footProg.className = (saldoFinale >= 0 ? 'text-primary' : 'text-danger');
+    if (footProg) {
+        footProg.textContent = '€ ' + saldoFinale.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        footProg.className = (saldoFinale >= 0 ? 'text-primary' : 'text-danger');
+    }
 }
 </script>
 

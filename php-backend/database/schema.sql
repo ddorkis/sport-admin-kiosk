@@ -40,10 +40,14 @@ CREATE TABLE IF NOT EXISTS `persone` (
   `tutore_email` VARCHAR(120) NULL,
   `tutore_relazione` VARCHAR(40) NULL COMMENT 'Padre, Madre, Tutore Legale',
   `note` TEXT NULL,
+  `attivo` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 se attiva, 0 se archiviata/nascosta',
+  `anonimizzato_gdpr` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 se anonimizzata ex Art. 17 GDPR',
+  `data_anonimizzazione` DATETIME NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX `idx_persona_cognome_nome` (`cognome`, `nome`),
   INDEX `idx_persona_cf` (`codice_fiscale`),
-  INDEX `idx_persona_minorenne` (`is_minorenne`)
+  INDEX `idx_persona_minorenne` (`is_minorenne`),
+  INDEX `idx_persona_attivo` (`attivo`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 3. TABELLA TESSERATI (Collegamento persona e anno sportivo)
@@ -151,6 +155,10 @@ CREATE TABLE IF NOT EXISTS `associazione` (
   `pec` VARCHAR(120) NULL,
   `codice_affiliazione` VARCHAR(80) NULL,
   `iban` VARCHAR(35) NULL,
+  `disciplina` VARCHAR(100) NOT NULL DEFAULT 'Pattinaggio Artistico a Rotelle',
+  `codice_affiliazione_fisr` VARCHAR(80) NULL DEFAULT 'FISR n. 3942',
+  `registro_rasd` VARCHAR(80) NULL DEFAULT 'RASD-RM-048291',
+  `enti_affiliati_json` TEXT NULL,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -172,8 +180,8 @@ CREATE TABLE IF NOT EXISTS `spese_previsionali` (
 -- DATI INIZIALI DI SEEDING (Admin predefinito, Anno 2024/2025, Gruppi e Spese)
 -- ==============================================================================
 
-INSERT INTO `associazione` (`id`, `denominazione`, `codice_fiscale`, `partita_iva`, `indirizzo`, `cap`, `comune`, `provincia`, `legale_rappresentante`, `telefono`, `email`, `pec`, `codice_affiliazione`, `iban`) VALUES
-(1, 'A.S.D. Polisportiva Aurora', '97854120584', '04859620581', 'Via dello Sport, 24', '00153', 'Roma', 'RM', 'Alessandro Bianchi', '06 5894123', 'segreteria@polisportivaurora.it', 'polisportivaurora@pec.it', 'CONI / CSEN n. 45892', 'IT60X0542811101000000123456')
+INSERT INTO `associazione` (`id`, `denominazione`, `codice_fiscale`, `partita_iva`, `indirizzo`, `cap`, `comune`, `provincia`, `legale_rappresentante`, `telefono`, `email`, `pec`, `codice_affiliazione`, `iban`, `disciplina`, `codice_affiliazione_fisr`, `registro_rasd`, `enti_affiliati_json`) VALUES
+(1, 'A.S.D. Polisportiva Aurora', '97854120584', '04859620581', 'Via dello Sport, 24', '00153', 'Roma', 'RM', 'Alessandro Bianchi', '06 5894123', 'segreteria@polisportivaurora.it', 'polisportivaurora@pec.it', 'CONI / FISR n. 3942', 'IT60X0542811101000000123456', 'Pattinaggio Artistico a Rotelle', 'FISR n. 3942', 'RASD-RM-048291', '[{\"id\":\"1\",\"tipo\":\"FSN\",\"sigla\":\"FISR\",\"denominazione_estesa\":\"Federazione Italiana Sport Rotellistici\",\"codice_societa\":\"3942\",\"attivo\":true},{\"id\":\"2\",\"tipo\":\"EPS\",\"sigla\":\"UISP\",\"denominazione_estesa\":\"Unione Italiana Sport Per tutti - Pattinaggio\",\"codice_societa\":\"UISP-RM-8492\",\"attivo\":true},{\"id\":\"3\",\"tipo\":\"EPS\",\"sigla\":\"AICS\",\"denominazione_estesa\":\"Associazione Italiana Cultura Sport\",\"codice_societa\":\"AICS-99321\",\"attivo\":true}]')
 ON DUPLICATE KEY UPDATE `denominazione` = VALUES(`denominazione`);
 
 -- Password default 'admin123' con BCRYPT: $2y$10$4.T8K321b7kE8lUqF7kQ3.QvB9iZq8WwJv9C5k4R3m1Q8W9E0R1T2

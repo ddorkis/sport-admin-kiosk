@@ -85,10 +85,18 @@ $allowedPages = [
     'quote'          => 'quote.php',
     'quote_scadute'  => 'quote_scadute.php',
     'previsioni'     => 'previsioni.php',
+    'previsione'     => 'previsioni.php',
+    'budget'         => 'previsioni.php',
+    'spesa_nuova'    => 'spesa_nuova.php',
+    'nuova_spesa'    => 'spesa_nuova.php',
+    'spesa_modifica' => 'spesa_nuova.php',
+    'sinottico_consiglio' => 'sinottico_consiglio.php',
+    'sinottico_cd'   => 'sinottico_consiglio.php',
     'pagamenti'      => 'pagamenti.php',
     'anni'           => 'anni.php',
     'utenti'         => 'utenti.php',
     'associazione'   => 'associazione.php',
+    'dati_associazione' => 'associazione.php',
     'logout'         => 'logout.php'
 ];
 
