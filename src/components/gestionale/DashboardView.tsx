@@ -57,6 +57,21 @@ export const DashboardView: React.FC<Props> = ({
 
   return (
     <div className="container-fluid py-4">
+      {/* Intestazione Dashboard Gestionale */}
+      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+          <h2 className="h3 fw-bold mb-1 d-flex align-items-center">
+            <i className="bi bi-speedometer2 text-primary me-2"></i>Dashboard Gestionale
+          </h2>
+          <p className="text-muted small mb-0">Controllo attività sportiva, tesseramenti e situazione quote mensili</p>
+        </div>
+        <div className="d-flex gap-2">
+          <button className="btn btn-primary fw-bold shadow-sm" onClick={onOpenNuovaPersona}>
+            <i className="bi bi-person-plus-fill me-1"></i> Nuova Persona
+          </button>
+        </div>
+      </div>
+
       {/* Banner Allerta Quote Scadute se presenti */}
       {quoteScadute.length > 0 && (
         <div className="alert alert-danger shadow-sm border-danger d-flex justify-content-between align-items-center mb-4 p-3 rounded-3">
@@ -95,12 +110,18 @@ export const DashboardView: React.FC<Props> = ({
                 <i className="bi bi-people-fill fs-3"></i>
               </div>
             </div>
-            <div className="mt-3 pt-2 border-top">
+            <div className="mt-3 pt-2 border-top d-flex align-items-center justify-content-between">
               <button
                 className="btn btn-sm btn-link p-0 text-decoration-none fw-semibold"
                 onClick={() => onNavigateTab('persone')}
               >
                 Vedi Anagrafica &rarr;
+              </button>
+              <button
+                className="btn btn-sm btn-link text-success p-0 text-decoration-none fw-bold"
+                onClick={onOpenNuovaPersona}
+              >
+                + Nuova Persona
               </button>
             </div>
           </div>
