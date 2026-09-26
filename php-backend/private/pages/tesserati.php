@@ -43,6 +43,9 @@ $tesserati = $stmt->fetchAll();
 // Recupera elenco persone e anni per il modal di nuovo tesseramento
 $elencoPersone = $db->query("SELECT id, nome, cognome, codice_fiscale, is_minorenne FROM persone ORDER BY cognome ASC, nome ASC")->fetchAll();
 $elencoAnni = $db->query("SELECT id, anno, attivo FROM anno ORDER BY id DESC")->fetchAll();
+
+$selectedPersonaId = isset($_GET['persona_id']) ? (int)$_GET['persona_id'] : 0;
+$autoOpenNuovoTess = !empty($_GET['nuovo_tess']);
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
@@ -50,9 +53,14 @@ $elencoAnni = $db->query("SELECT id, anno, attivo FROM anno ORDER BY id DESC")->
         <h2 class="h3 fw-bold mb-0"><i class="bi bi-card-checklist me-2 text-primary"></i>Registro Tesserati Sportivi</h2>
         <p class="text-muted small mb-0">Gestione soci tesserati, numeri di tessera e certificati medici</p>
     </div>
-    <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNuovoTesseramento">
-        <i class="bi bi-plus-lg me-1"></i> Nuovo Tesseramento
-    </button>
+    <div class="d-flex gap-2">
+        <a href="index.php?page=persona_nuova" class="btn btn-outline-primary fw-semibold shadow-sm">
+            <i class="bi bi-person-plus-fill me-1"></i> Nuova Persona
+        </a>
+        <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNuovoTesseramento">
+            <i class="bi bi-plus-lg me-1"></i> Nuovo Tesseramento
+        </button>
+    </div>
 </div>
 
 <!-- Filtri -->
@@ -154,12 +162,12 @@ $elencoAnni = $db->query("SELECT id, anno, attivo FROM anno ORDER BY id DESC")->
                             <select name="persona_id" class="form-select" required>
                                 <option value="">-- Seleziona persona da anagrafica --</option>
                                 <?php foreach ($elencoPersone as $p): ?>
-                                    <option value="<?= $p['id'] ?>">
+                                    <option value="<?= $p['id'] ?>" <?= ($selectedPersonaId === (int)$p['id'] ? 'selected' : '') ?>>
                                         <?= htmlspecialchars($p['cognome'] . ' ' . $p['nome']) ?> (CF: <?= htmlspecialchars($p['codice_fiscale']) ?><?= $p['is_minorenne'] ? ' - Minorenne' : '' ?>)
                                     </option>
                                 <?php endforeach; ?>
                             </select>
-                            <div class="form-text">Se la persona non è presente, inseriscila prima in <a href="index.php?page=persone">Persone & Tutori</a>.</div>
+                            <div class="form-text">Se la persona non è presente, inseriscila in <a href="index.php?page=persona_nuova">Nuova Persona</a>.</div>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label fw-bold">Anno Sportivo <span class="text-danger">*</span></label>
@@ -211,5 +219,17 @@ $elencoAnni = $db->query("SELECT id, anno, attivo FROM anno ORDER BY id DESC")->
         </div>
     </div>
 </div>
+
+<?php if ($autoOpenNuovoTess): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var modalEl = document.getElementById('modalNuovoTesseramento');
+    if (modalEl) {
+        var myModal = new bootstrap.Modal(modalEl);
+        myModal.show();
+    }
+});
+</script>
+<?php endif; ?>
 
 <?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>

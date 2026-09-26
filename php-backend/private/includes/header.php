@@ -81,7 +81,7 @@ if (!$annoAttivo) {
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link <?= ($page==='persone'?'active':'') ?>" href="index.php?page=persone">
+                    <a class="nav-link <?= (in_array($page, ['persone', 'persona_nuova', 'nuova_persona']) ? 'active' : '') ?>" href="index.php?page=persone">
                         <i class="bi bi-people me-2"></i> Persone & Tutori
                     </a>
                 </li>
@@ -152,7 +152,7 @@ if (!$annoAttivo) {
             <div class="offcanvas-body d-flex flex-column">
                 <ul class="nav flex-column mb-auto">
                     <li class="nav-item"><a class="nav-link text-white <?= ($page==='gestionale'?'fw-bold':'') ?>" href="index.php?page=gestionale"><i class="bi bi-speedometer2 me-2"></i> Dashboard</a></li>
-                    <li class="nav-item"><a class="nav-link text-white <?= ($page==='persone'?'fw-bold':'') ?>" href="index.php?page=persone"><i class="bi bi-people me-2"></i> Persone & Tutori</a></li>
+                    <li class="nav-item"><a class="nav-link text-white <?= (in_array($page, ['persone', 'persona_nuova', 'nuova_persona']) ? 'fw-bold active bg-white bg-opacity-10 rounded' : '') ?>" href="index.php?page=persone"><i class="bi bi-people me-2"></i> Persone & Tutori</a></li>
                     <li class="nav-item"><a class="nav-link text-white <?= ($page==='tesserati'?'fw-bold':'') ?>" href="index.php?page=tesserati"><i class="bi bi-card-checklist me-2"></i> Tesserati</a></li>
                     <li class="nav-item"><a class="nav-link text-white <?= ($page==='gruppi'?'fw-bold':'') ?>" href="index.php?page=gruppi"><i class="bi bi-diagram-3 me-2"></i> Gruppi & Corsi</a></li>
                     <li class="nav-item"><a class="nav-link text-white <?= ($page==='quote'||$page==='quote_scadute'?'fw-bold':'') ?>" href="index.php?page=quote"><i class="bi bi-cash-stack me-2"></i> Quote Mensili</a></li>

@@ -53,6 +53,9 @@ $prossimeQuote = $db->query("
         <p class="text-muted small mb-0">Controllo attività sportiva, tesseramenti e situazione quote mensili</p>
     </div>
     <div class="d-flex gap-2">
+        <a href="index.php?page=persona_nuova" class="btn btn-primary fw-bold btn-sm shadow-sm">
+            <i class="bi bi-person-plus-fill me-1"></i> Nuova Persona
+        </a>
         <a href="index.php?page=kiosk" class="btn btn-warning text-dark fw-bold btn-sm shadow-sm">
             <i class="bi bi-tablet-landscape me-1"></i> Apri Kiosk Desk
         </a>
@@ -70,6 +73,11 @@ $prossimeQuote = $db->query("
                     <small class="text-muted">su <?= $totPersone ?> anagrafiche (<?= $totMinorenni ?> minori)</small>
                 </div>
                 <div class="p-3 bg-primary-subtle text-primary rounded-3"><i class="bi bi-people-fill fs-3"></i></div>
+            </div>
+            <div class="mt-2 pt-2 border-top">
+                <a href="index.php?page=persone" class="small text-primary fw-semibold text-decoration-none">Vedi anagrafica &rarr;</a>
+                <span class="text-muted mx-1">•</span>
+                <a href="index.php?page=persona_nuova" class="small text-success fw-bold text-decoration-none">+ Nuova Persona</a>
             </div>
         </div>
     </div>
