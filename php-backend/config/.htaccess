@@ -1,0 +1,2 @@
+# Blocca qualsiasi accesso diretto via browser alla configurazione database
+Require all denied

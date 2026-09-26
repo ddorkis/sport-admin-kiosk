@@ -1,0 +1,2 @@
+# Blocca qualsiasi accesso diretto via browser alla cartella privata
+Require all denied

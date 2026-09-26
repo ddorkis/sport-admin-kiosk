@@ -72,6 +72,58 @@ Require all denied
 `
       );
 
+      // Aggiungi README.md completo
+      zip.file(
+        'README.md',
+        `# Backend PHP & MariaDB - Gestionale Sportivo ASD
+
+Architettura professionale in PHP Nativo + MariaDB / MySQL con supporto 100% OFFLINE.
+
+Tutti i fogli di stile CSS (Bootstrap 5.3), script JS (Bootstrap Bundle) e font delle icone (Bootstrap Icons) sono inclusi nella cartella \`public/assets/\`.
+Nessuna connessione a Internet è richiesta: il sito funziona al 100% anche su PC completamente disconnessi dalla rete.
+
+## Istruzioni Rapide:
+1. Importa 'database/schema.sql' in MariaDB/MySQL.
+2. Configura 'config/database.php' con le tue credenziali.
+3. Imposta la cartella 'public/' come DocumentRoot del tuo Web Server Apache (XAMPP/LAMP) o Nginx.
+4. Accedi via browser a http://localhost/ con:
+   - Admin: user 'admin', password 'admin123'
+   - Kiosk: user 'kiosk', password 'admin123'
+`
+      );
+
+      // Inserisci asset statici CSS, JS e Font per funzionamento 100% Offline
+      const assetList = [
+        { url: '/php-assets/css/bootstrap.min.css', zipPath: 'public/assets/css/bootstrap.min.css', binary: false },
+        { url: '/php-assets/css/bootstrap-icons.min.css', zipPath: 'public/assets/css/bootstrap-icons.min.css', binary: false },
+        { url: '/php-assets/js/bootstrap.bundle.min.js', zipPath: 'public/assets/js/bootstrap.bundle.min.js', binary: false },
+        { url: '/php-assets/fonts/bootstrap-icons.woff2', zipPath: 'public/assets/fonts/bootstrap-icons.woff2', binary: true },
+        { url: '/php-assets/fonts/bootstrap-icons.woff', zipPath: 'public/assets/fonts/bootstrap-icons.woff', binary: true },
+        { url: '/php-assets/fonts/bootstrap-icons.woff2', zipPath: 'public/assets/css/fonts/bootstrap-icons.woff2', binary: true },
+        { url: '/php-assets/fonts/bootstrap-icons.woff', zipPath: 'public/assets/css/fonts/bootstrap-icons.woff', binary: true },
+      ];
+
+      await Promise.all(
+        assetList.map(async (asset) => {
+          try {
+            const resp = await fetch(asset.url);
+            if (resp.ok) {
+              if (asset.binary) {
+                const data = await resp.arrayBuffer();
+                zip.file(asset.zipPath, data);
+              } else {
+                const data = await resp.text();
+                zip.file(asset.zipPath, data);
+              }
+            } else {
+              console.warn(`Impossibile scaricare asset locale ${asset.url}: HTTP ${resp.status}`);
+            }
+          } catch (e) {
+            console.warn(`Errore caricamento asset ${asset.url}:`, e);
+          }
+        })
+      );
+
       const content = await zip.generateAsync({ type: 'blob' });
       const url = URL.createObjectURL(content);
       const a = document.createElement('a');
@@ -100,8 +152,13 @@ Require all denied
             <div className="d-flex align-items-center gap-3">
               <i className="bi bi-file-earmark-code-fill text-warning fs-3"></i>
               <div>
-                <h5 className="modal-title fw-bold mb-0">Codice Sorgente PHP & Script MariaDB</h5>
-                <small className="text-secondary">Architettura con web root pubblica e pagine private dinamiche</small>
+                <div className="d-flex align-items-center gap-2">
+                  <h5 className="modal-title fw-bold mb-0">Codice Sorgente PHP & Script MariaDB</h5>
+                  <span className="badge bg-success bg-opacity-75 text-white small">
+                    <i className="bi bi-wifi-off me-1"></i> 100% Offline
+                  </span>
+                </div>
+                <small className="text-secondary">Architettura con web root pubblica, pagine private e asset CSS/JS locali</small>
               </div>
             </div>
 
@@ -295,11 +352,26 @@ Require all denied
                     </div>
                   </div>
 
-                  <div className="card border-0 bg-light p-4 rounded-4">
+                  <div className="card border-0 bg-light p-4 rounded-4 mb-4">
                     <h5 className="fw-bold text-dark mb-2">4. Accesso & Credenziali Default</h5>
                     <ul className="small text-muted mb-0">
                       <li><strong>Amministratore Gestionale:</strong> username <code>admin</code>, password <code>admin</code> (accede a tutte le tabelle, quote scadute e configurazioni).</li>
                       <li><strong>Totem / Reception Kiosk:</strong> username <code>kiosk</code>, password <code>kiosk</code> (flag <code>is_kiosk=1</code>, entra direttamente nei bottoni grandi touch).</li>
+                    </ul>
+                  </div>
+
+                  <div className="card border-0 bg-light p-4 rounded-4 border-start border-success border-4">
+                    <h5 className="fw-bold text-success mb-2">
+                      <i className="bi bi-wifi-off me-2"></i>
+                      5. Funzionamento 100% Offline (Senza Connessione Internet)
+                    </h5>
+                    <p className="small text-muted mb-2">
+                      Tutti i file CSS di Bootstrap 5, le icone Bootstrap Icons e gli script JavaScript sono inclusi localmente nella cartella <code>public/assets/</code>.
+                    </p>
+                    <ul className="small text-muted mb-0">
+                      <li>Nessuna richiesta remota verso CDN (come <code>cdn.jsdelivr.net</code>).</li>
+                      <li>Il gestionale e la postazione Kiosk funzionano regolarmente anche se il PC è completamente privo di connessione Internet.</li>
+                      <li>Il pacchetto ZIP include già l'intera alberatura <code>public/assets/css/</code>, <code>public/assets/js/</code> e <code>public/assets/fonts/</code>.</li>
                     </ul>
                   </div>
                 </div>

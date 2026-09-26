@@ -1,0 +1,15 @@
+<?php
+/**
+ * Personalizzazione Locale dei Percorsi (Opzionale)
+ * Rinomina questo file in 'paths.local.php' all'interno di 'public/'
+ * per sovrascrivere al volo la posizione delle cartelle sul tuo server.
+ */
+
+// Esempio A: Se 'private' e 'config' sono state spostate fuori dalla WebRoot:
+// define('PATH_ROOT', '/var/www/gestionale_sportivo');
+// define('PATH_CONFIG', '/var/www/gestionale_sportivo/config');
+// define('PATH_PRIVATE', '/var/www/gestionale_sportivo/private');
+
+// Esempio B: Se hai rinominato o spostato le cartelle:
+// define('PATH_PRIVATE', '/opt/app_data/private');
+// define('PATH_CONFIG', '/opt/app_data/config');
