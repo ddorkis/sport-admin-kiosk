@@ -79,12 +79,39 @@ export const StampaDocumentoModal: React.FC<Props> = ({
         return;
       }
 
-      // Render su canvas ad alta risoluzione
+      // Render su canvas ad alta risoluzione con opzioni stabili per layout e flex
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: 1024,
+        onclone: (clonedDoc) => {
+          const el = clonedDoc.getElementById('documento-stampa-a4');
+          if (el) {
+            el.style.width = '800px';
+            el.style.maxWidth = '800px';
+            el.style.margin = '0 auto';
+          }
+          const style = clonedDoc.createElement('style');
+          style.innerHTML = `
+            * {
+              -webkit-font-smoothing: antialiased;
+              text-rendering: geometricPrecision;
+            }
+            .row {
+              margin-left: 0 !important;
+              margin-right: 0 !important;
+            }
+            .row > * {
+              padding-left: 6px !important;
+              padding-right: 6px !important;
+            }
+          `;
+          clonedDoc.head.appendChild(style);
+        }
       });
 
       const imgData = canvas.toDataURL('image/jpeg', 0.96);
@@ -94,10 +121,22 @@ export const StampaDocumentoModal: React.FC<Props> = ({
         format: 'a4'
       });
 
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const pdfWidth = 210; // mm A4
+      const pageHeight = 297; // mm A4
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
 
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, Math.min(pdfHeight, 297));
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 5) {
+        position -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
       pdf.save(getPdfFilename());
 
       setPdfSuccess(true);
@@ -304,102 +343,107 @@ export const StampaDocumentoModal: React.FC<Props> = ({
             >
               {/* CARTA INTESTATA ASSOCIAZIONE SPORTIVA (Senza riquadri colorati per la stampa) */}
               <div className="border-bottom pb-3 mb-4" style={{ borderColor: '#212529', borderBottomWidth: '2px' }}>
-                <div className="row align-items-center">
-                  <div className="col-7">
-                    <h3
-                      className="fw-bold mb-1 text-uppercase"
-                      style={{
-                        color: '#111827',
-                        letterSpacing: '0.02em',
-                        fontSize: '1.35rem',
-                        lineHeight: '1.2'
-                      }}
-                    >
-                      {associazione.denominazione || 'A.S.D. Pattinaggio Artistico Aurora'}
-                    </h3>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ verticalAlign: 'top', width: '64%', paddingRight: '15px' }}>
+                        <h3
+                          className="fw-bold mb-1 text-uppercase"
+                          style={{
+                            color: '#111827',
+                            letterSpacing: '0.02em',
+                            fontSize: '1.35rem',
+                            lineHeight: '1.2'
+                          }}
+                        >
+                          {associazione.denominazione || 'A.S.D. Pattinaggio Artistico Aurora'}
+                        </h3>
 
-                    <div className="small text-secondary lh-sm" style={{ fontSize: '0.82rem' }}>
-                      <div className="text-dark">
-                        <i className="bi bi-geo-alt me-1"></i>
-                        {associazione.indirizzo}, {associazione.cap} {associazione.comune} ({associazione.provincia})
-                      </div>
-                      <div className="mt-1">
-                        <strong>Codice Fiscale:</strong> <span className="font-monospace fw-bold text-dark">{associazione.codice_fiscale}</span>
-                        {associazione.partita_iva && (
-                          <span className="ms-3">
-                            <strong>P.IVA:</strong> <span className="font-monospace text-dark">{associazione.partita_iva}</span>
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-1">
-                        <strong>Legale Rappresentante:</strong> {associazione.legale_rappresentante} (Presidente)
-                      </div>
-                      {(associazione.telefono || associazione.email) && (
-                        <div className="mt-1">
-                          {associazione.telefono && <span className="me-3"><strong>Tel:</strong> {associazione.telefono}</span>}
-                          {associazione.email && <span><strong>Email:</strong> {associazione.email}</span>}
+                        <div className="small text-secondary lh-sm" style={{ fontSize: '0.82rem' }}>
+                          <div className="text-dark">
+                            <i className="bi bi-geo-alt me-1"></i>
+                            {associazione.indirizzo}, {associazione.cap} {associazione.comune} ({associazione.provincia})
+                          </div>
+                          <div className="mt-1">
+                            <strong>Codice Fiscale:</strong> <span className="font-monospace fw-bold text-dark">{associazione.codice_fiscale}</span>
+                            {associazione.partita_iva && (
+                              <span className="ms-3">
+                                <strong>P.IVA:</strong> <span className="font-monospace text-dark">{associazione.partita_iva}</span>
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-1">
+                            <strong>Legale Rappresentante:</strong> {associazione.legale_rappresentante} (Presidente)
+                          </div>
+                          {(associazione.telefono || associazione.email) && (
+                            <div className="mt-1">
+                              {associazione.telefono && <span className="me-3"><strong>Tel:</strong> {associazione.telefono}</span>}
+                              {associazione.email && <span><strong>Email:</strong> {associazione.email}</span>}
+                            </div>
+                          )}
+                          {associazione.pec && (
+                            <div className="mt-0 text-muted" style={{ fontSize: '0.76rem' }}>
+                              <strong>PEC:</strong> {associazione.pec}
+                            </div>
+                          )}
                         </div>
-                      )}
-                      {associazione.pec && (
-                        <div className="mt-0 text-muted" style={{ fontSize: '0.76rem' }}>
-                          <strong>PEC:</strong> {associazione.pec}
+                      </td>
+
+                      {/* Riquadro Federazione / Registri Ufficiali (Pulito, senza colori per la stampa) */}
+                      <td style={{ verticalAlign: 'top', width: '36%', textAlign: 'right' }}>
+                        <div
+                          style={{
+                            display: 'inline-block',
+                            border: '1.5px solid #212529',
+                            borderRadius: '4px',
+                            backgroundColor: '#ffffff',
+                            padding: '10px 12px',
+                            textAlign: 'center',
+                            width: '100%',
+                            maxWidth: '250px',
+                            boxSizing: 'border-box'
+                          }}
+                        >
+                          <div className="fw-bold text-dark mb-1 text-uppercase" style={{ fontSize: '0.82rem', letterSpacing: '0.03em' }}>
+                            FEDERAZIONE FISR
+                          </div>
+                          <div className="text-muted lh-tight" style={{ fontSize: '0.7rem' }}>
+                            Federazione Italiana Sport Rotellistici
+                          </div>
+                          
+                          <div
+                            className="mt-1 pt-1 border-top fw-bold text-dark"
+                            style={{ fontSize: '0.74rem' }}
+                          >
+                            Cod. Società FISR: {associazione.codice_affiliazione_fisr || '3942'}
+                          </div>
+
+                          <div
+                            className="mt-1 text-dark border p-1 rounded"
+                            style={{
+                              borderColor: '#495057',
+                              fontSize: '0.7rem',
+                              fontWeight: 600
+                            }}
+                          >
+                            Reg. Naz. RASD / CONI: {associazione.registro_rasd || 'RASD-RM-048291'}
+                          </div>
+
+                          {epsList.length > 0 && (
+                            <div className="mt-1 pt-1 border-top" style={{ fontSize: '0.7rem' }}>
+                              <span className="text-muted">Affiliaz. EPS: </span>
+                              <strong className="text-dark">{epsList.map(e => e.sigla).join(' • ')}</strong>
+                            </div>
+                          )}
+
+                          <div className="text-dark fw-semibold mt-1" style={{ fontSize: '0.72rem' }}>
+                            Anno Sportivo {annoAttivo ? annoAttivo.anno : '2024/2025'}
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Riquadro Federazione / Registri Ufficiali (Pulito, senza colori per la stampa) */}
-                  <div className="col-5 d-flex justify-content-end">
-                    <div
-                      style={{
-                        border: '1.5px solid #212529',
-                        borderRadius: '4px',
-                        backgroundColor: '#ffffff',
-                        padding: '10px 12px',
-                        textAlign: 'center',
-                        width: '100%',
-                        maxWidth: '250px',
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      <div className="fw-bold text-dark mb-1 text-uppercase" style={{ fontSize: '0.82rem', letterSpacing: '0.03em' }}>
-                        FEDERAZIONE FISR
-                      </div>
-                      <div className="text-muted lh-tight" style={{ fontSize: '0.7rem' }}>
-                        Federazione Italiana Sport Rotellistici
-                      </div>
-                      
-                      <div
-                        className="mt-1 pt-1 border-top fw-bold text-dark"
-                        style={{ fontSize: '0.74rem' }}
-                      >
-                        Cod. Società FISR: {associazione.codice_affiliazione_fisr || '3942'}
-                      </div>
-
-                      <div
-                        className="mt-1 text-dark border p-1 rounded"
-                        style={{
-                          borderColor: '#495057',
-                          fontSize: '0.7rem',
-                          fontWeight: 600
-                        }}
-                      >
-                        Reg. Naz. RASD / CONI: {associazione.registro_rasd || 'RASD-RM-048291'}
-                      </div>
-
-                      {epsList.length > 0 && (
-                        <div className="mt-1 pt-1 border-top" style={{ fontSize: '0.7rem' }}>
-                          <span className="text-muted">Affiliaz. EPS: </span>
-                          <strong className="text-dark">{epsList.map(e => e.sigla).join(' • ')}</strong>
-                        </div>
-                      )}
-
-                      <div className="text-dark fw-semibold mt-1" style={{ fontSize: '0.72rem' }}>
-                        Anno Sportivo {annoAttivo ? annoAttivo.anno : '2024/2025'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
 
               {/* CONTENUTO 1: RICEVUTA DI PAGAMENTO FISCALMENTE CONFORME (ART. 15 TUIR / DM 28/03/2007) */}
@@ -413,45 +457,49 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                       marginBottom: '16px'
                     }}
                   >
-                    <div className="d-flex justify-content-between align-items-start">
-                      <div>
-                        <div
-                          style={{
-                            display: 'inline-block',
-                            border: '1.5px solid #212529',
-                            color: '#111827',
-                            backgroundColor: '#ffffff',
-                            fontWeight: 700,
-                            fontSize: '0.95rem',
-                            padding: '5px 12px',
-                            borderRadius: '4px',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.04em'
-                          }}
-                        >
-                          Quietanza di Incasso e Attestazione Spesa Sportiva
-                        </div>
-                        <div className="text-dark fw-semibold small mt-2">
-                          Valida ai fini della detrazione fiscale del 19% (Art. 15, c. 1, lett. i-quinquies, D.P.R. 917/1986 - D.M. 28/03/2007)
-                        </div>
-                        <div className="text-muted" style={{ fontSize: '0.76rem' }}>
-                          Operazione istituzionale de-commercializzata e fuori campo IVA ai sensi dell'art. 148 TUIR e art. 4 D.P.R. 633/1972.
-                        </div>
-                      </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <tbody>
+                        <tr>
+                          <td style={{ verticalAlign: 'top' }}>
+                            <div
+                              style={{
+                                display: 'inline-block',
+                                border: '1.5px solid #212529',
+                                color: '#111827',
+                                backgroundColor: '#ffffff',
+                                fontWeight: 700,
+                                fontSize: '0.95rem',
+                                padding: '5px 12px',
+                                borderRadius: '4px',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.04em'
+                              }}
+                            >
+                              Quietanza di Incasso e Attestazione Spesa Sportiva
+                            </div>
+                            <div className="text-dark fw-semibold small mt-2">
+                              Valida ai fini della detrazione fiscale del 19% (Art. 15, c. 1, lett. i-quinquies, D.P.R. 917/1986 - D.M. 28/03/2007)
+                            </div>
+                            <div className="text-muted" style={{ fontSize: '0.76rem' }}>
+                              Operazione istituzionale de-commercializzata e fuori campo IVA ai sensi dell'art. 148 TUIR e art. 4 D.P.R. 633/1972.
+                            </div>
+                          </td>
 
-                      <div className="text-end" style={{ minWidth: '160px' }}>
-                        <div className="text-muted small text-uppercase fw-bold">Ricevuta N.</div>
-                        <div
-                          className="font-monospace fw-bold text-dark"
-                          style={{ fontSize: '1.25rem' }}
-                        >
-                          {pagamento ? pagamento.ricevuta_numero : 'RIC-2024-0001'}
-                        </div>
-                        <div className="small text-dark mt-1">
-                          <strong>Data Incasso:</strong> {pagamento ? pagamento.data_pagamento : dataOggi}
-                        </div>
-                      </div>
-                    </div>
+                          <td style={{ verticalAlign: 'top', textAlign: 'right', width: '180px' }}>
+                            <div className="text-muted small text-uppercase fw-bold">Ricevuta N.</div>
+                            <div
+                              className="font-monospace fw-bold text-dark"
+                              style={{ fontSize: '1.25rem' }}
+                            >
+                              {pagamento ? pagamento.ricevuta_numero : 'RIC-2024-0001'}
+                            </div>
+                            <div className="small text-dark mt-1">
+                              <strong>Data Incasso:</strong> {pagamento ? pagamento.data_pagamento : dataOggi}
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
 
                   {/* Quadro Anagrafico Fiscale Completo: Atleta Praticante & Genitore Pagatore (Obbligatorio per il 730) */}
@@ -464,97 +512,101 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                       marginBottom: '16px'
                     }}
                   >
-                    <div className="row g-3">
-                      {/* Colonna Sinistra: Atleta Praticante */}
-                      <div className="col-6 border-end" style={{ borderColor: '#495057' }}>
-                        <div
-                          style={{
-                            fontSize: '0.74rem',
-                            textTransform: 'uppercase',
-                            fontWeight: 700,
-                            color: '#495057',
-                            letterSpacing: '0.04em',
-                            marginBottom: '4px'
-                          }}
-                        >
-                          1. Ragazzo / Atleta Praticante (Beneficiario del Corso)
-                        </div>
-                        <div className="fs-6 fw-bold text-dark">
-                          {persona ? `${persona.cognome} ${persona.nome}` : 'Atleta Tesserato'}
-                        </div>
-                        <div className="small text-dark mt-1">
-                          <strong>Codice Fiscale:</strong> <span className="font-monospace fw-bold">{persona?.codice_fiscale}</span>
-                        </div>
-                        <div className="small text-muted mt-1">
-                          Nato/a a: <strong>{persona?.luogo_nascita || '—'}</strong> il{' '}
-                          <strong>{persona?.data_nascita ? new Date(persona.data_nascita).toLocaleDateString('it-IT') : '—'}</strong>
-                        </div>
-                        <div className="small text-muted">
-                          Residente in: {persona?.indirizzo}, {persona?.citta}
-                        </div>
-                        <div className="small text-dark mt-1">
-                          Tessera FISR/Sociale: <strong>{tesserato?.numero_tessera || 'TESS-001'}</strong> ({tesserato?.tipo_tesseramento || 'Atleta'})
-                        </div>
-                      </div>
-
-                      {/* Colonna Destra: Soggetto Pagatore / Genitore Avente Diritto alla Detrazione */}
-                      <div className="col-6">
-                        <div
-                          style={{
-                            fontSize: '0.74rem',
-                            textTransform: 'uppercase',
-                            fontWeight: 700,
-                            color: '#495057',
-                            letterSpacing: '0.04em',
-                            marginBottom: '4px'
-                          }}
-                        >
-                          2. Soggetto Pagatore (Intestatario ai fini 730 / Unico)
-                        </div>
-
-                        {persona && persona.is_minorenne ? (
-                          <div>
-                            <div className="fs-6 fw-bold text-dark">
-                              {persona.tutore_cognome || 'Genitore'} {persona.tutore_nome || ''}
-                            </div>
-                            <div className="small text-dark mt-1">
-                              <strong>C.F. Pagatore (Detraente):</strong>{' '}
-                              <span className="font-monospace fw-bold text-dark">
-                                {persona.tutore_cf || 'NON INSERITO'}
-                              </span>
-                            </div>
-                            <div className="small text-muted mt-1">
-                              Titolo: <strong>{persona.tutore_relazione || 'Esercente la potestà genitoriale'}</strong>
-                            </div>
-                            <div className="small text-muted">
-                              Telefono: {persona.tutore_telefono || persona.telefono || '—'}
-                            </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <tbody>
+                        <tr>
+                          {/* Colonna Sinistra: Atleta Praticante */}
+                          <td style={{ width: '50%', verticalAlign: 'top', paddingRight: '15px', borderRight: '1px solid #495057' }}>
                             <div
-                              className="mt-2 text-dark border p-1 rounded"
                               style={{
-                                borderColor: '#495057',
-                                fontSize: '0.72rem'
+                                fontSize: '0.74rem',
+                                textTransform: 'uppercase',
+                                fontWeight: 700,
+                                color: '#495057',
+                                letterSpacing: '0.04em',
+                                marginBottom: '4px'
                               }}
                             >
-                              <i className="bi bi-info-circle me-1"></i>
-                              Spesa detraibile nel Quadro E del Mod. 730 per ragazzi tra i 5 e i 18 anni.
+                              1. Ragazzo / Atleta Praticante (Beneficiario del Corso)
                             </div>
-                          </div>
-                        ) : (
-                          <div>
                             <div className="fs-6 fw-bold text-dark">
-                              {persona ? `${persona.cognome} ${persona.nome}` : 'Socio Atleta'}
+                              {persona ? `${persona.cognome} ${persona.nome}` : 'Atleta Tesserato'}
                             </div>
                             <div className="small text-dark mt-1">
                               <strong>Codice Fiscale:</strong> <span className="font-monospace fw-bold">{persona?.codice_fiscale}</span>
                             </div>
                             <div className="small text-muted mt-1">
-                              (Atleta maggiorenne / pagamento in proprio)
+                              Nato/a a: <strong>{persona?.luogo_nascita || '—'}</strong> il{' '}
+                              <strong>{persona?.data_nascita ? new Date(persona.data_nascita).toLocaleDateString('it-IT') : '—'}</strong>
                             </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                            <div className="small text-muted">
+                              Residente in: {persona?.indirizzo}, {persona?.citta}
+                            </div>
+                            <div className="small text-dark mt-1">
+                              Tessera FISR/Sociale: <strong>{tesserato?.numero_tessera || 'TESS-001'}</strong> ({tesserato?.tipo_tesseramento || 'Atleta'})
+                            </div>
+                          </td>
+
+                          {/* Colonna Destra: Soggetto Pagatore / Genitore Avente Diritto alla Detrazione */}
+                          <td style={{ width: '50%', verticalAlign: 'top', paddingLeft: '15px' }}>
+                            <div
+                              style={{
+                                fontSize: '0.74rem',
+                                textTransform: 'uppercase',
+                                fontWeight: 700,
+                                color: '#495057',
+                                letterSpacing: '0.04em',
+                                marginBottom: '4px'
+                              }}
+                            >
+                              2. Soggetto Pagatore (Intestatario ai fini 730 / Unico)
+                            </div>
+
+                            {persona && persona.is_minorenne ? (
+                              <div>
+                                <div className="fs-6 fw-bold text-dark">
+                                  {persona.tutore_cognome || 'Genitore'} {persona.tutore_nome || ''}
+                                </div>
+                                <div className="small text-dark mt-1">
+                                  <strong>C.F. Pagatore (Detraente):</strong>{' '}
+                                  <span className="font-monospace fw-bold text-dark">
+                                    {persona.tutore_cf || 'NON INSERITO'}
+                                  </span>
+                                </div>
+                                <div className="small text-muted mt-1">
+                                  Titolo: <strong>{persona.tutore_relazione || 'Esercente la potestà genitoriale'}</strong>
+                                </div>
+                                <div className="small text-muted">
+                                  Telefono: {persona.tutore_telefono || persona.telefono || '—'}
+                                </div>
+                                <div
+                                  className="mt-2 text-dark border p-1 rounded"
+                                  style={{
+                                    borderColor: '#495057',
+                                    fontSize: '0.72rem'
+                                  }}
+                                >
+                                  <i className="bi bi-info-circle me-1"></i>
+                                  Spesa detraibile nel Quadro E del Mod. 730 per ragazzi tra i 5 e i 18 anni.
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                <div className="fs-6 fw-bold text-dark">
+                                  {persona ? `${persona.cognome} ${persona.nome}` : 'Socio Atleta'}
+                                </div>
+                                <div className="small text-dark mt-1">
+                                  <strong>Codice Fiscale:</strong> <span className="font-monospace fw-bold">{persona?.codice_fiscale}</span>
+                                </div>
+                                <div className="small text-muted mt-1">
+                                  (Atleta maggiorenne / pagamento in proprio)
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
 
                   {/* Tabella Dettaglio Contabile e Modalità Tracciata */}
@@ -648,36 +700,40 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                       marginBottom: '10px'
                     }}
                   >
-                    <div className="row align-items-end">
-                      <div className="col-7">
-                        <div className="fw-bold text-dark mb-1" style={{ fontSize: '0.78rem' }}>
-                          Dichiarazione di Trasparenza Fiscale (Art. 15 DPR 917/1986 & D.M. 28/03/2007):
-                        </div>
-                        <div className="text-secondary" style={{ fontSize: '0.73rem', lineHeight: '1.35' }}>
-                          Si attesta che la somma sopra indicata è stata interamente riscossa per l'esercizio della pratica sportiva dilettantistica non professionale del beneficiario.
-                        </div>
-                        <div className="text-muted mt-2" style={{ fontSize: '0.72rem' }}>
-                          <strong>Imposta di bollo:</strong> Esente da imposta di bollo ai sensi dell'art. 27-bis della Tabella B allegata al D.P.R. 26/10/1972 n. 642 (Atti e documenti posti in essere da Associazioni e Società Sportive Dilettantistiche iscritte al Registro Nazionale).
-                        </div>
-                      </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <tbody>
+                        <tr>
+                          <td style={{ width: '60%', verticalAlign: 'bottom', paddingRight: '15px' }}>
+                            <div className="fw-bold text-dark mb-1" style={{ fontSize: '0.78rem' }}>
+                              Dichiarazione di Trasparenza Fiscale (Art. 15 DPR 917/1986 & D.M. 28/03/2007):
+                            </div>
+                            <div className="text-secondary" style={{ fontSize: '0.73rem', lineHeight: '1.35' }}>
+                              Si attesta che la somma sopra indicata è stata interamente riscossa per l'esercizio della pratica sportiva dilettantistica non professionale del beneficiario.
+                            </div>
+                            <div className="text-muted mt-2" style={{ fontSize: '0.72rem' }}>
+                              <strong>Imposta di bollo:</strong> Esente da imposta di bollo ai sensi dell'art. 27-bis della Tabella B allegata al D.P.R. 26/10/1972 n. 642 (Atti e documenti posti in essere da Associazioni e Società Sportive Dilettantistiche iscritte al Registro Nazionale).
+                            </div>
+                          </td>
 
-                      <div className="col-5 text-end">
-                        <div className="small text-muted">Per quietanza e attestazione:</div>
-                        <div className="fw-bold text-dark" style={{ fontSize: '0.95rem' }}>
-                          {associazione.denominazione}
-                        </div>
-                        <div className="text-muted" style={{ fontSize: '0.78rem' }}>
-                          Il Legale Rappresentante: <strong>{associazione.legale_rappresentante}</strong>
-                        </div>
-                        <div
-                          className="mt-4 pt-3 border-bottom d-inline-block"
-                          style={{ width: '200px', borderColor: '#495057' }}
-                        ></div>
-                        <div className="text-muted small" style={{ fontSize: '0.72rem' }}>
-                          Timbro societario e firma
-                        </div>
-                      </div>
-                    </div>
+                          <td style={{ width: '40%', verticalAlign: 'bottom', textAlign: 'right' }}>
+                            <div className="small text-muted">Per quietanza e attestazione:</div>
+                            <div className="fw-bold text-dark" style={{ fontSize: '0.95rem' }}>
+                              {associazione.denominazione}
+                            </div>
+                            <div className="text-muted" style={{ fontSize: '0.78rem' }}>
+                              Il Legale Rappresentante: <strong>{associazione.legale_rappresentante}</strong>
+                            </div>
+                            <div
+                              className="mt-4 pt-3 border-bottom d-inline-block"
+                              style={{ width: '200px', borderColor: '#495057' }}
+                            ></div>
+                            <div className="text-muted small" style={{ fontSize: '0.72rem' }}>
+                              Timbro societario e firma
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
@@ -818,59 +874,83 @@ export const StampaDocumentoModal: React.FC<Props> = ({
 
                       {/* Box Consensi con Caselle di Spunta Stampabili */}
                       <div className="border p-2 rounded mb-2" style={{ borderColor: '#6b7280', backgroundColor: '#ffffff' }}>
-                        <div className="d-flex justify-content-between align-items-start mb-1">
-                          <div>
-                            <strong>A) Gestione Associativa, Tesseramento Federale e Copertura Assicurativa (Obbligatorio per legge e statuto):</strong>
-                            <div className="text-secondary" style={{ fontSize: '0.71rem' }}>
-                              Trattamento dei dati anagrafici e fiscali per la gestione del libro soci, tesseramento alla Federazione Italiana Sport Rotellistici (FISR), Enti di Promozione Sportiva (EPS), iscrizione al Registro Nazionale RASD / Dipartimento per lo Sport e attivazione delle polizze infortuni/RCT obbligatorie.
-                            </div>
-                          </div>
-                          <div className="text-nowrap ms-3 fw-bold font-monospace pt-1" style={{ fontSize: '0.78rem' }}>
-                            [ X ] ACCONSENTO &nbsp;&nbsp; [ &nbsp; ] NON ACCONSENTO
-                          </div>
-                        </div>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <tbody>
+                            <tr>
+                              <td style={{ verticalAlign: 'top', paddingRight: '12px' }}>
+                                <strong>A) Gestione Associativa, Tesseramento Federale e Copertura Assicurativa (Obbligatorio per legge e statuto):</strong>
+                                <div className="text-secondary" style={{ fontSize: '0.71rem' }}>
+                                  Trattamento dei dati anagrafici e fiscali per la gestione del libro soci, tesseramento alla Federazione Italiana Sport Rotellistici (FISR), Enti di Promozione Sportiva (EPS), iscrizione al Registro Nazionale RASD / Dipartimento per lo Sport e attivazione delle polizze infortuni/RCT obbligatorie.
+                                </div>
+                              </td>
+                              <td style={{ verticalAlign: 'top', width: '220px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                                <div className="fw-bold font-monospace pt-1" style={{ fontSize: '0.78rem' }}>
+                                  [ X ] ACCONSENTO &nbsp;&nbsp; [ &nbsp; ] NON ACCONSENTO
+                                </div>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
                       </div>
 
                       <div className="border p-2 rounded mb-2" style={{ borderColor: '#6b7280', backgroundColor: '#ffffff' }}>
-                        <div className="d-flex justify-content-between align-items-start mb-1">
-                          <div>
-                            <strong>B) Trattamento Dati Sanitari e Certificazione Medica di Idoneità Sportiva (Art. 9 GDPR):</strong>
-                            <div className="text-secondary" style={{ fontSize: '0.71rem' }}>
-                              Trattamento dei dati relativi allo stato di salute e conservazione del certificato medico di idoneità all'attività sportiva per le finalità di tutela sanitaria previste dalla legge.
-                            </div>
-                          </div>
-                          <div className="text-nowrap ms-3 fw-bold font-monospace pt-1" style={{ fontSize: '0.78rem' }}>
-                            [ X ] ACCONSENTO &nbsp;&nbsp; [ &nbsp; ] NON ACCONSENTO
-                          </div>
-                        </div>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <tbody>
+                            <tr>
+                              <td style={{ verticalAlign: 'top', paddingRight: '12px' }}>
+                                <strong>B) Trattamento Dati Sanitari e Certificazione Medica di Idoneità Sportiva (Art. 9 GDPR):</strong>
+                                <div className="text-secondary" style={{ fontSize: '0.71rem' }}>
+                                  Trattamento dei dati relativi allo stato di salute e conservazione del certificato medico di idoneità all'attività sportiva per le finalità di tutela sanitaria previste dalla legge.
+                                </div>
+                              </td>
+                              <td style={{ verticalAlign: 'top', width: '220px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                                <div className="fw-bold font-monospace pt-1" style={{ fontSize: '0.78rem' }}>
+                                  [ X ] ACCONSENTO &nbsp;&nbsp; [ &nbsp; ] NON ACCONSENTO
+                                </div>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
                       </div>
 
                       <div className="border p-2 rounded mb-2" style={{ borderColor: '#6b7280', backgroundColor: '#ffffff' }}>
-                        <div className="d-flex justify-content-between align-items-start mb-1">
-                          <div>
-                            <strong>C) Liberatoria Riprese Fotografiche, Video e Utilizzo Immagini Istituzionali:</strong>
-                            <div className="text-secondary" style={{ fontSize: '0.71rem' }}>
-                              Autorizzazione a riprese foto/video durante allenamenti, saggi, esibizioni, rassegne e gare FISR/EPS per pubblicazione sul sito web, social network ufficiali societari, materiale divulgativo e archivio storico della società, escluso qualsiasi uso commerciale a terzi.
-                            </div>
-                          </div>
-                          <div className="text-nowrap ms-3 fw-bold font-monospace pt-1" style={{ fontSize: '0.78rem' }}>
-                            [ X ] ACCONSENTO &nbsp;&nbsp; [ &nbsp; ] NON ACCONSENTO
-                          </div>
-                        </div>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <tbody>
+                            <tr>
+                              <td style={{ verticalAlign: 'top', paddingRight: '12px' }}>
+                                <strong>C) Liberatoria Riprese Fotografiche, Video e Utilizzo Immagini Istituzionali:</strong>
+                                <div className="text-secondary" style={{ fontSize: '0.71rem' }}>
+                                  Autorizzazione a riprese foto/video durante allenamenti, saggi, esibizioni, rassegne e gare FISR/EPS per pubblicazione sul sito web, social network ufficiali societari, materiale divulgativo e archivio storico della società, escluso qualsiasi uso commerciale a terzi.
+                                </div>
+                              </td>
+                              <td style={{ verticalAlign: 'top', width: '220px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                                <div className="fw-bold font-monospace pt-1" style={{ fontSize: '0.78rem' }}>
+                                  [ X ] ACCONSENTO &nbsp;&nbsp; [ &nbsp; ] NON ACCONSENTO
+                                </div>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
                       </div>
 
                       <div className="border p-2 rounded" style={{ borderColor: '#6b7280', backgroundColor: '#ffffff' }}>
-                        <div className="d-flex justify-content-between align-items-start">
-                          <div>
-                            <strong>D) Comunicazioni Istituzionali e Organizzative di Servizio (WhatsApp / SMS / Email):</strong>
-                            <div className="text-secondary" style={{ fontSize: '0.71rem' }}>
-                              Ricezione di comunicazioni di servizio inerenti orari corsi, variazioni pista, convocazioni alle gare, manifestazioni ed eventi societari.
-                            </div>
-                          </div>
-                          <div className="text-nowrap ms-3 fw-bold font-monospace pt-1" style={{ fontSize: '0.78rem' }}>
-                            [ X ] ACCONSENTO &nbsp;&nbsp; [ &nbsp; ] NON ACCONSENTO
-                          </div>
-                        </div>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <tbody>
+                            <tr>
+                              <td style={{ verticalAlign: 'top', paddingRight: '12px' }}>
+                                <strong>D) Comunicazioni Istituzionali e Organizzative di Servizio (WhatsApp / SMS / Email):</strong>
+                                <div className="text-secondary" style={{ fontSize: '0.71rem' }}>
+                                  Ricezione di comunicazioni di servizio inerenti orari corsi, variazioni pista, convocazioni alle gare, manifestazioni ed eventi societari.
+                                </div>
+                              </td>
+                              <td style={{ verticalAlign: 'top', width: '220px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                                <div className="fw-bold font-monospace pt-1" style={{ fontSize: '0.78rem' }}>
+                                  [ X ] ACCONSENTO &nbsp;&nbsp; [ &nbsp; ] NON ACCONSENTO
+                                </div>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   </div>
@@ -881,28 +961,32 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                       Sottoscrizione e Firme
                     </div>
                     <div className="p-3">
-                      <div className="row g-3">
-                        <div className="col-4">
-                          <div className="small text-muted">Luogo e Data:</div>
-                          <div className="fw-bold mt-1" style={{ fontSize: '0.85rem' }}>{associazione.comune}, {dataOggi}</div>
-                        </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <tbody>
+                          <tr>
+                            <td style={{ width: '33%', verticalAlign: 'top', paddingRight: '10px' }}>
+                              <div className="small text-muted">Luogo e Data:</div>
+                              <div className="fw-bold mt-1" style={{ fontSize: '0.85rem' }}>{associazione.comune}, {dataOggi}</div>
+                            </td>
 
-                        <div className="col-4 text-center">
-                          <div className="small text-muted">Firma Richiesta Iscrizione e Statuto:</div>
-                          <div className="mt-4 pt-3 border-bottom mx-auto" style={{ width: '85%', borderColor: '#111827' }}></div>
-                          <div className="small text-muted mt-1" style={{ fontSize: '0.7rem' }}>
-                            {persona.is_minorenne ? 'Firma del Genitore / Tutore Legale' : 'Firma del Socio / Atleta'}
-                          </div>
-                        </div>
+                            <td style={{ width: '34%', verticalAlign: 'top', textAlign: 'center', padding: '0 10px' }}>
+                              <div className="small text-muted">Firma Richiesta Iscrizione e Statuto:</div>
+                              <div className="mt-4 pt-3 border-bottom mx-auto" style={{ width: '85%', borderColor: '#111827' }}></div>
+                              <div className="small text-muted mt-1" style={{ fontSize: '0.7rem' }}>
+                                {persona.is_minorenne ? 'Firma del Genitore / Tutore Legale' : 'Firma del Socio / Atleta'}
+                              </div>
+                            </td>
 
-                        <div className="col-4 text-center">
-                          <div className="small text-muted">Firma Consensi Privacy e Foto (GDPR):</div>
-                          <div className="mt-4 pt-3 border-bottom mx-auto" style={{ width: '85%', borderColor: '#111827' }}></div>
-                          <div className="small text-muted mt-1" style={{ fontSize: '0.7rem' }}>
-                            {persona.is_minorenne ? 'Firma del Genitore / Tutore Legale' : 'Firma del Socio / Atleta'}
-                          </div>
-                        </div>
-                      </div>
+                            <td style={{ width: '33%', verticalAlign: 'top', textAlign: 'center', paddingLeft: '10px' }}>
+                              <div className="small text-muted">Firma Consensi Privacy e Foto (GDPR):</div>
+                              <div className="mt-4 pt-3 border-bottom mx-auto" style={{ width: '85%', borderColor: '#111827' }}></div>
+                              <div className="small text-muted mt-1" style={{ fontSize: '0.7rem' }}>
+                                {persona.is_minorenne ? 'Firma del Genitore / Tutore Legale' : 'Firma del Socio / Atleta'}
+                              </div>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
                   </div>
 
@@ -912,28 +996,32 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                       Spazio Riservato al Consiglio Direttivo dell'Associazione
                     </div>
                     <div className="p-3">
-                      <div className="row align-items-center" style={{ fontSize: '0.78rem' }}>
-                        <div className="col-4">
-                          <div>Domanda ricevuta in data: <strong>{dataOggi}</strong></div>
-                          <div className="mt-1">
-                            Esito Delibera: <strong>[ X ] ACCOLTA &nbsp;&nbsp; [ &nbsp; ] RESPINTA</strong>
-                          </div>
-                          <div className="mt-1">
-                            Verbale del C.D. n.: <strong>______ / {new Date().getFullYear()}</strong>
-                          </div>
-                        </div>
-                        <div className="col-4">
-                          <div>N. Tessera FISR/EPS: <strong>{tesserato?.numero_tessera || '________________'}</strong></div>
-                          <div className="mt-1">Anno Sportivo: <strong>{annoAttivo ? annoAttivo.anno : '2024/2025'}</strong></div>
-                          <div className="mt-1">Certificato Medico: <strong>[ &nbsp; ] Presentato &nbsp; [ &nbsp; ] In attesa</strong></div>
-                        </div>
-                        <div className="col-4 text-end">
-                          <div className="small text-muted">Il Presidente / Legale Rappresentante:</div>
-                          <div className="fw-bold text-dark mt-1">{associazione.legale_rappresentante}</div>
-                          <div className="mt-3 pt-3 border-bottom d-inline-block" style={{ width: '180px', borderColor: '#111827' }}></div>
-                          <div className="small text-muted mt-1" style={{ fontSize: '0.7rem' }}>Timbro A.S.D. e Firma</div>
-                        </div>
-                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                        <tbody>
+                          <tr>
+                            <td style={{ width: '35%', verticalAlign: 'top', paddingRight: '10px' }}>
+                              <div>Domanda ricevuta in data: <strong>{dataOggi}</strong></div>
+                              <div className="mt-1">
+                                Esito Delibera: <strong>[ X ] ACCOLTA &nbsp;&nbsp; [ &nbsp; ] RESPINTA</strong>
+                              </div>
+                              <div className="mt-1">
+                                Verbale del C.D. n.: <strong>______ / {new Date().getFullYear()}</strong>
+                              </div>
+                            </td>
+                            <td style={{ width: '35%', verticalAlign: 'top', padding: '0 10px' }}>
+                              <div>N. Tessera FISR/EPS: <strong>{tesserato?.numero_tessera || '________________'}</strong></div>
+                              <div className="mt-1">Anno Sportivo: <strong>{annoAttivo ? annoAttivo.anno : '2024/2025'}</strong></div>
+                              <div className="mt-1">Certificato Medico: <strong>[ &nbsp; ] Presentato &nbsp; [ &nbsp; ] In attesa</strong></div>
+                            </td>
+                            <td style={{ width: '30%', verticalAlign: 'top', textAlign: 'right', paddingLeft: '10px' }}>
+                              <div className="small text-muted">Il Presidente / Legale Rappresentante:</div>
+                              <div className="fw-bold text-dark mt-1">{associazione.legale_rappresentante}</div>
+                              <div className="mt-3 pt-3 border-bottom d-inline-block" style={{ width: '180px', borderColor: '#111827' }}></div>
+                              <div className="small text-muted mt-1" style={{ fontSize: '0.7rem' }}>Timbro A.S.D. e Firma</div>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>
@@ -942,22 +1030,26 @@ export const StampaDocumentoModal: React.FC<Props> = ({
               {/* CONTENUTO 3: RICHIESTA CERTIFICATO MEDICO SPORTIVO (Monocromatico, senza riquadri colorati) */}
               {tipoDocumento === 'richiesta_certificato' && persona && (
                 <div>
-                  <div className="row mb-4">
-                    <div className="col-7">
-                      <div className="small text-muted">
-                        Protocollo Richiesta N.: <strong>CERT-FISR-{new Date().getFullYear()}-{persona.id}</strong>
-                      </div>
-                      <div className="small text-muted">Data di emissione: <strong>{dataOggi}</strong></div>
-                    </div>
-                    <div className="col-5 text-end">
-                      <div className="border p-2 rounded bg-white text-start small" style={{ borderColor: '#495057' }}>
-                        <strong>Spett.le Medico Curante:</strong>
-                        <div>Al Medico di Medicina Generale /</div>
-                        <div>Al Pediatra di Libera Scelta /</div>
-                        <div>Al Medico Specialista in Medicina dello Sport</div>
-                      </div>
-                    </div>
-                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '16px' }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ verticalAlign: 'top', width: '55%' }}>
+                          <div className="small text-muted">
+                            Protocollo Richiesta N.: <strong>CERT-FISR-{new Date().getFullYear()}-{persona.id}</strong>
+                          </div>
+                          <div className="small text-muted">Data di emissione: <strong>{dataOggi}</strong></div>
+                        </td>
+                        <td style={{ verticalAlign: 'top', width: '45%', textAlign: 'right' }}>
+                          <div className="border p-2 rounded bg-white text-start small d-inline-block" style={{ borderColor: '#495057', minWidth: '240px' }}>
+                            <strong>Spett.le Medico Curante:</strong>
+                            <div>Al Medico di Medicina Generale /</div>
+                            <div>Al Pediatra di Libera Scelta /</div>
+                            <div>Al Medico Specialista in Medicina dello Sport</div>
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
 
                   <div className="text-center my-4">
                     <h4 className="fw-bold text-uppercase border-bottom pb-2" style={{ borderColor: '#212529', color: '#111827' }}>
@@ -1007,55 +1099,59 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                       PERTANTO SI RICHIEDE IL RILASCIO DEL:
                     </div>
 
-                    <div className="row g-3 mb-4">
-                      <div className="col-6">
-                        <div
-                          style={{
-                            border: '1.5px solid #212529',
-                            borderRadius: '4px',
-                            backgroundColor: '#ffffff',
-                            padding: '12px 14px',
-                            textAlign: 'center',
-                            height: '100%',
-                            boxSizing: 'border-box'
-                          }}
-                        >
-                          <div className="fw-bold mb-1 text-dark text-uppercase" style={{ fontSize: '0.92rem' }}>
-                            CERTIFICATO NON AGONISTICO
-                          </div>
-                          <div className="text-secondary small" style={{ fontSize: '0.75rem' }}>
-                            Ai sensi del D.M. 24/04/2013 e s.m.i.
-                          </div>
-                          <div className="text-dark small mt-2" style={{ fontSize: '0.74rem', lineHeight: '1.35' }}>
-                            (con elettrocardiogramma ECG a riposo per atleti promozionali, avviamento e corsi formativi)
-                          </div>
-                        </div>
-                      </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '16px' }}>
+                      <tbody>
+                        <tr>
+                          <td style={{ width: '50%', verticalAlign: 'top', paddingRight: '8px' }}>
+                            <div
+                              style={{
+                                border: '1.5px solid #212529',
+                                borderRadius: '4px',
+                                backgroundColor: '#ffffff',
+                                padding: '12px 14px',
+                                textAlign: 'center',
+                                height: '100%',
+                                boxSizing: 'border-box'
+                              }}
+                            >
+                              <div className="fw-bold mb-1 text-dark text-uppercase" style={{ fontSize: '0.92rem' }}>
+                                CERTIFICATO NON AGONISTICO
+                              </div>
+                              <div className="text-secondary small" style={{ fontSize: '0.75rem' }}>
+                                Ai sensi del D.M. 24/04/2013 e s.m.i.
+                              </div>
+                              <div className="text-dark small mt-2" style={{ fontSize: '0.74rem', lineHeight: '1.35' }}>
+                                (con elettrocardiogramma ECG a riposo per atleti promozionali, avviamento e corsi formativi)
+                              </div>
+                            </div>
+                          </td>
 
-                      <div className="col-6">
-                        <div
-                          style={{
-                            border: '1.5px solid #212529',
-                            borderRadius: '4px',
-                            backgroundColor: '#ffffff',
-                            padding: '12px 14px',
-                            textAlign: 'center',
-                            height: '100%',
-                            boxSizing: 'border-box'
-                          }}
-                        >
-                          <div className="fw-bold mb-1 text-dark text-uppercase" style={{ fontSize: '0.92rem' }}>
-                            CERTIFICATO AGONISTICO FISR (TAB. B1)
-                          </div>
-                          <div className="text-secondary small" style={{ fontSize: '0.75rem' }}>
-                            Ai sensi del D.M. 18/02/1982 - Sport Rotellistici
-                          </div>
-                          <div className="text-dark small mt-2" style={{ fontSize: '0.74rem', lineHeight: '1.35' }}>
-                            (per atleti agonisti partecipanti a campionati provinciali, regionali e nazionali FISR)
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                          <td style={{ width: '50%', verticalAlign: 'top', paddingLeft: '8px' }}>
+                            <div
+                              style={{
+                                border: '1.5px solid #212529',
+                                borderRadius: '4px',
+                                backgroundColor: '#ffffff',
+                                padding: '12px 14px',
+                                textAlign: 'center',
+                                height: '100%',
+                                boxSizing: 'border-box'
+                              }}
+                            >
+                              <div className="fw-bold mb-1 text-dark text-uppercase" style={{ fontSize: '0.92rem' }}>
+                                CERTIFICATO AGONISTICO FISR (TAB. B1)
+                              </div>
+                              <div className="text-secondary small" style={{ fontSize: '0.75rem' }}>
+                                Ai sensi del D.M. 18/02/1982 - Sport Rotellistici
+                              </div>
+                              <div className="text-dark small mt-2" style={{ fontSize: '0.74rem', lineHeight: '1.35' }}>
+                                (per atleti agonisti partecipanti a campionati provinciali, regionali e nazionali FISR)
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
 
                     <p className="text-muted">
                       Si rilascia la presente attestazione su richiesta dell'interessato per gli usi consentiti dalla legge al fine del tesseramento e della tutela sanitaria delle attività sportive su rotelle.
@@ -1063,26 +1159,32 @@ export const StampaDocumentoModal: React.FC<Props> = ({
                   </div>
 
                   {/* Firma e Timbro */}
-                  <div className="row g-4 pt-4 border-top mt-5" style={{ borderColor: '#495057' }}>
-                    <div className="col-6">
-                      <div className="small text-muted">Luogo e Data:</div>
-                      <div className="fw-bold">{associazione.comune}, {dataOggi}</div>
-                      <div className="mt-3 small text-muted">Timbro Associazione Sportiva:</div>
-                      <div
-                        className="border border-dashed rounded p-3 text-center text-muted small mt-1"
-                        style={{ height: '70px', borderColor: '#495057' }}
-                      >
-                        [ Timbro {associazione.denominazione} ]
-                      </div>
-                    </div>
+                  <div className="pt-4 border-top mt-5" style={{ borderColor: '#495057' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <tbody>
+                        <tr>
+                          <td style={{ width: '50%', verticalAlign: 'top', paddingRight: '15px' }}>
+                            <div className="small text-muted">Luogo e Data:</div>
+                            <div className="fw-bold">{associazione.comune}, {dataOggi}</div>
+                            <div className="mt-3 small text-muted">Timbro Associazione Sportiva:</div>
+                            <div
+                              className="border border-dashed rounded p-3 text-center text-muted small mt-1"
+                              style={{ height: '70px', borderColor: '#495057' }}
+                            >
+                              [ Timbro {associazione.denominazione} ]
+                            </div>
+                          </td>
 
-                    <div className="col-6 text-end">
-                      <div className="small text-muted">Il Legale Rappresentante:</div>
-                      <div className="fs-6 fw-bold text-dark mt-1">{associazione.legale_rappresentante}</div>
-                      <div className="small text-muted">Presidente {associazione.denominazione}</div>
-                      <div className="mt-4 pt-3 border-bottom d-inline-block" style={{ width: '220px', borderColor: '#212529' }}></div>
-                      <div className="small text-muted">Firma</div>
-                    </div>
+                          <td style={{ width: '50%', verticalAlign: 'top', textAlign: 'right', paddingLeft: '15px' }}>
+                            <div className="small text-muted">Il Legale Rappresentante:</div>
+                            <div className="fs-6 fw-bold text-dark mt-1">{associazione.legale_rappresentante}</div>
+                            <div className="small text-muted">Presidente {associazione.denominazione}</div>
+                            <div className="mt-4 pt-3 border-bottom d-inline-block" style={{ width: '220px', borderColor: '#212529' }}></div>
+                            <div className="small text-muted">Firma</div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}

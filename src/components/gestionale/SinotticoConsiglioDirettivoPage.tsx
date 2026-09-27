@@ -114,7 +114,7 @@ export const SinotticoConsiglioDirettivoPage: React.FC<Props> = ({
     };
   });
 
-  // Generazione PDF
+  // Generazione PDF ad alta risoluzione con impaginazione e layout fisso
   const handleDownloadPdf = async () => {
     const elemento = document.getElementById('sinottico-documento-cd');
     if (!elemento) return;
@@ -125,20 +125,59 @@ export const SinotticoConsiglioDirettivoPage: React.FC<Props> = ({
         scale: 2,
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: 1024,
+        onclone: (clonedDoc) => {
+          const el = clonedDoc.getElementById('sinottico-documento-cd');
+          if (el) {
+            el.style.width = '820px';
+            el.style.maxWidth = '820px';
+            el.style.margin = '0 auto';
+          }
+          const style = clonedDoc.createElement('style');
+          style.innerHTML = `
+            * {
+              -webkit-font-smoothing: antialiased;
+              text-rendering: geometricPrecision;
+            }
+            .row {
+              margin-left: 0 !important;
+              margin-right: 0 !important;
+            }
+            .row > * {
+              padding-left: 6px !important;
+              padding-right: 6px !important;
+            }
+          `;
+          clonedDoc.head.appendChild(style);
+        }
       });
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const imgData = canvas.toDataURL('image/jpeg', 0.96);
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
         format: 'a4'
       });
 
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const pdfWidth = 210; // mm A4
+      const pageHeight = 297; // mm A4
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
 
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 5) {
+        position -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
       pdf.save(`Sinottico_Consiglio_Direttivo_${stagioneNome.replace('/', '_')}.pdf`);
 
       setPdfSuccess(true);
@@ -228,51 +267,57 @@ export const SinotticoConsiglioDirettivoPage: React.FC<Props> = ({
         style={{ maxWidth: '1100px' }}
       >
         {/* Intestazione Associazione */}
-        <div className="d-flex justify-content-between align-items-start border-bottom pb-4 mb-4">
-          <div>
-            <div className="badge bg-primary text-uppercase mb-1" style={{ fontSize: '0.72rem' }}>
-              {associazione.disciplina || 'Pattinaggio Artistico a Rotelle'}
-            </div>
-            <h3 className="fw-bold text-primary mb-1 text-uppercase">
-              {associazione.denominazione}
-            </h3>
-            <div className="text-muted small lh-sm">
-              <div>
-                {associazione.indirizzo}, {associazione.cap} {associazione.comune} ({associazione.provincia})
-              </div>
-              <div className="mt-1">
-                <strong>C.F.:</strong> {associazione.codice_fiscale}
-                {associazione.partita_iva && (
-                  <span className="ms-2">| <strong>P.IVA:</strong> {associazione.partita_iva}</span>
-                )}
-                {associazione.telefono && <span className="ms-2">| <strong>Tel:</strong> {associazione.telefono}</span>}
-              </div>
-              <div className="mt-1">
-                <strong>Presidente / Legale Rappr.:</strong> {associazione.legale_rappresentante}
-              </div>
-              <div className="mt-1 text-danger fw-semibold">
-                <i className="bi bi-award-fill me-1"></i>
-                Federazione Ufficiale: {associazione.codice_affiliazione_fisr || 'FISR n. 3942'}
-                {associazione.registro_rasd && (
-                  <span className="ms-2 text-dark font-monospace">| Registro RASD: {associazione.registro_rasd}</span>
-                )}
-              </div>
-              {epsAttivi.length > 0 && (
-                <div className="mt-1 text-primary small">
-                  <strong>EPS Riconosciuti:</strong> {epsAttivi.map((e) => e.sigla).join(' • ')}
-                </div>
-              )}
-            </div>
-          </div>
+        <div className="border-bottom pb-4 mb-4">
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <tbody>
+              <tr>
+                <td style={{ verticalAlign: 'top', width: '68%', paddingRight: '15px' }}>
+                  <div className="badge bg-primary text-uppercase mb-1" style={{ fontSize: '0.72rem' }}>
+                    {associazione.disciplina || 'Pattinaggio Artistico a Rotelle'}
+                  </div>
+                  <h3 className="fw-bold text-primary mb-1 text-uppercase">
+                    {associazione.denominazione}
+                  </h3>
+                  <div className="text-muted small lh-sm">
+                    <div>
+                      {associazione.indirizzo}, {associazione.cap} {associazione.comune} ({associazione.provincia})
+                    </div>
+                    <div className="mt-1">
+                      <strong>C.F.:</strong> {associazione.codice_fiscale}
+                      {associazione.partita_iva && (
+                        <span className="ms-2">| <strong>P.IVA:</strong> {associazione.partita_iva}</span>
+                      )}
+                      {associazione.telefono && <span className="ms-2">| <strong>Tel:</strong> {associazione.telefono}</span>}
+                    </div>
+                    <div className="mt-1">
+                      <strong>Presidente / Legale Rappr.:</strong> {associazione.legale_rappresentante}
+                    </div>
+                    <div className="mt-1 text-danger fw-semibold">
+                      <i className="bi bi-award-fill me-1"></i>
+                      Federazione Ufficiale: {associazione.codice_affiliazione_fisr || 'FISR n. 3942'}
+                      {associazione.registro_rasd && (
+                        <span className="ms-2 text-dark font-monospace">| Registro RASD: {associazione.registro_rasd}</span>
+                      )}
+                    </div>
+                    {epsAttivi.length > 0 && (
+                      <div className="mt-1 text-primary small">
+                        <strong>EPS Riconosciuti:</strong> {epsAttivi.map((e) => e.sigla).join(' • ')}
+                      </div>
+                    )}
+                  </div>
+                </td>
 
-          <div className="text-end">
-            <span className="badge bg-primary fs-6 px-3 py-2 fw-bold text-uppercase shadow-xs">
-              Consiglio Direttivo
-            </span>
-            <div className="fw-bold text-dark mt-2 fs-6">Bilancio di Previsione</div>
-            <div className="badge bg-light text-dark border mt-1">Stagione {stagioneNome}</div>
-            <div className="small text-muted mt-2">Data Prospetto: {dataOggi}</div>
-          </div>
+                <td style={{ verticalAlign: 'top', width: '32%', textAlign: 'right' }}>
+                  <span className="badge bg-primary fs-6 px-3 py-2 fw-bold text-uppercase shadow-xs">
+                    Consiglio Direttivo
+                  </span>
+                  <div className="fw-bold text-dark mt-2 fs-6">Bilancio di Previsione</div>
+                  <div className="badge bg-light text-dark border mt-1">Stagione {stagioneNome}</div>
+                  <div className="small text-muted mt-2">Data Prospetto: {dataOggi}</div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
         {/* Titolo Documento */}
@@ -498,17 +543,23 @@ export const SinotticoConsiglioDirettivoPage: React.FC<Props> = ({
         </div>
 
         {/* Firme Ufficiali */}
-        <div className="row pt-4 mt-3 border-top">
-          <div className="col-6 text-center">
-            <small className="text-muted d-block mb-4">Il Responsabile Amministrativo / Tesoriere</small>
-            <div className="border-bottom mx-auto" style={{ width: '220px' }}></div>
-            <small className="text-muted mt-1 d-block">Firma e Visto di Congruità</small>
-          </div>
-          <div className="col-6 text-center">
-            <small className="text-muted d-block mb-4">Il Presidente / Legale Rappresentante</small>
-            <div className="border-bottom mx-auto" style={{ width: '220px' }}></div>
-            <strong className="text-dark d-block mt-1">{associazione.legale_rappresentante}</strong>
-          </div>
+        <div className="pt-4 mt-3 border-top">
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <tbody>
+              <tr>
+                <td style={{ width: '50%', textAlign: 'center', verticalAlign: 'top', paddingRight: '15px' }}>
+                  <small className="text-muted d-block mb-4">Il Responsabile Amministrativo / Tesoriere</small>
+                  <div className="border-bottom mx-auto" style={{ width: '220px' }}></div>
+                  <small className="text-muted mt-1 d-block">Firma e Visto di Congruità</small>
+                </td>
+                <td style={{ width: '50%', textAlign: 'center', verticalAlign: 'top', paddingLeft: '15px' }}>
+                  <small className="text-muted d-block mb-4">Il Presidente / Legale Rappresentante</small>
+                  <div className="border-bottom mx-auto" style={{ width: '220px' }}></div>
+                  <strong className="text-dark d-block mt-1">{associazione.legale_rappresentante}</strong>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

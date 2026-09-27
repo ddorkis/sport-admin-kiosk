@@ -159,7 +159,34 @@ export const StampaProspettoCdModal: React.FC<Props> = ({
         scale: 2,
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: 1024,
+        onclone: (clonedDoc) => {
+          const el = clonedDoc.getElementById('prospetto-cd-stampa-a4');
+          if (el) {
+            el.style.width = '820px';
+            el.style.maxWidth = '820px';
+            el.style.margin = '0 auto';
+          }
+          const style = clonedDoc.createElement('style');
+          style.innerHTML = `
+            * {
+              -webkit-font-smoothing: antialiased;
+              text-rendering: geometricPrecision;
+            }
+            .row {
+              margin-left: 0 !important;
+              margin-right: 0 !important;
+            }
+            .row > * {
+              padding-left: 6px !important;
+              padding-right: 6px !important;
+            }
+          `;
+          clonedDoc.head.appendChild(style);
+        }
       });
 
       const pdf = new jsPDF({
@@ -383,57 +410,69 @@ export const StampaProspettoCdModal: React.FC<Props> = ({
               }}
             >
               {/* INTESTAZIONE UFFICIALE ASD */}
-              <div className="row pb-3 mb-3 border-bottom border-dark border-2 align-items-center">
-                <div className="col-8">
-                  <div className="d-flex align-items-center gap-2 mb-1">
-                    <span className="p-2 bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center" style={{ width: '40px', height: '40px' }}>
-                      <i className="bi bi-award-fill fs-5"></i>
-                    </span>
-                    <div>
-                      <h4 className="fw-bold mb-0 text-dark text-uppercase tracking-wide" style={{ letterSpacing: '0.5px' }}>
-                        {associazione.denominazione}
-                      </h4>
-                      <div className="small text-muted fw-semibold">
-                        Associazione Sportiva Dilettantistica &bull; {associazione.disciplina || 'Pattinaggio Artistico a Rotelle'}
-                      </div>
-                    </div>
-                  </div>
+              <div className="pb-3 mb-3 border-bottom border-dark border-2">
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ verticalAlign: 'middle', width: '65%', paddingRight: '15px' }}>
+                        <table style={{ borderCollapse: 'collapse' }}>
+                          <tbody>
+                            <tr>
+                              <td style={{ verticalAlign: 'middle', paddingRight: '12px' }}>
+                                <span className="p-2 bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center" style={{ width: '40px', height: '40px' }}>
+                                  <i className="bi bi-award-fill fs-5"></i>
+                                </span>
+                              </td>
+                              <td style={{ verticalAlign: 'middle' }}>
+                                <h4 className="fw-bold mb-0 text-dark text-uppercase tracking-wide" style={{ letterSpacing: '0.5px' }}>
+                                  {associazione.denominazione}
+                                </h4>
+                                <div className="small text-muted fw-semibold">
+                                  Associazione Sportiva Dilettantistica &bull; {associazione.disciplina || 'Pattinaggio Artistico a Rotelle'}
+                                </div>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
 
-                  <div className="small text-secondary mt-2" style={{ fontSize: '0.82rem', lineHeight: '1.4' }}>
-                    <div>
-                      <strong>Sede Legale:</strong> {associazione.indirizzo} - {associazione.cap} {associazione.comune} ({associazione.provincia})
-                    </div>
-                    <div>
-                      <strong>C.F.:</strong> {associazione.codice_fiscale}
-                      {associazione.partita_iva && <> &bull; <strong>P.IVA:</strong> {associazione.partita_iva}</>}
-                      {(associazione.codice_affiliazione_fisr || associazione.codice_affiliazione) && (
-                        <> &bull; <strong>Cod. FISR:</strong> {associazione.codice_affiliazione_fisr || associazione.codice_affiliazione}</>
-                      )}
-                      {associazione.registro_rasd && <> &bull; <strong>RASD:</strong> {associazione.registro_rasd}</>}
-                    </div>
-                    <div>
-                      <strong>Email:</strong> {associazione.email || 'info@asdpattinaggio.it'}
-                      {associazione.telefono && <> &bull; <strong>Tel:</strong> {associazione.telefono}</>}
-                    </div>
-                  </div>
-                </div>
+                        <div className="small text-secondary mt-2" style={{ fontSize: '0.82rem', lineHeight: '1.4' }}>
+                          <div>
+                            <strong>Sede Legale:</strong> {associazione.indirizzo} - {associazione.cap} {associazione.comune} ({associazione.provincia})
+                          </div>
+                          <div>
+                            <strong>C.F.:</strong> {associazione.codice_fiscale}
+                            {associazione.partita_iva && <> &bull; <strong>P.IVA:</strong> {associazione.partita_iva}</>}
+                            {(associazione.codice_affiliazione_fisr || associazione.codice_affiliazione) && (
+                              <> &bull; <strong>Cod. FISR:</strong> {associazione.codice_affiliazione_fisr || associazione.codice_affiliazione}</>
+                            )}
+                            {associazione.registro_rasd && <> &bull; <strong>RASD:</strong> {associazione.registro_rasd}</>}
+                          </div>
+                          <div>
+                            <strong>Email:</strong> {associazione.email || 'info@asdpattinaggio.it'}
+                            {associazione.telefono && <> &bull; <strong>Tel:</strong> {associazione.telefono}</>}
+                          </div>
+                        </div>
+                      </td>
 
-                <div className="col-4 text-end">
-                  <div className="p-2 border border-2 border-primary rounded-3 bg-light text-center">
-                    <div className="small text-muted fw-bold text-uppercase" style={{ fontSize: '0.72rem' }}>
-                      Documento Ufficiale C.D.
-                    </div>
-                    <div className="fw-bold text-primary fs-6">
-                      PROSPETTO PREVISIONALE
-                    </div>
-                    <div className="small text-dark fw-semibold mt-1">
-                      Stagione {stagioneNome}
-                    </div>
-                    <div className="text-muted" style={{ fontSize: '0.75rem' }}>
-                      Data: {dataOggi}
-                    </div>
-                  </div>
-                </div>
+                      <td style={{ verticalAlign: 'middle', width: '35%', textAlign: 'right' }}>
+                        <div className="p-2 border border-2 border-primary rounded-3 bg-light text-center d-inline-block" style={{ width: '100%', maxWidth: '240px' }}>
+                          <div className="small text-muted fw-bold text-uppercase" style={{ fontSize: '0.72rem' }}>
+                            Documento Ufficiale C.D.
+                          </div>
+                          <div className="fw-bold text-primary fs-6">
+                            PROSPETTO PREVISIONALE
+                          </div>
+                          <div className="small text-dark fw-semibold mt-1">
+                            Stagione {stagioneNome}
+                          </div>
+                          <div className="text-muted" style={{ fontSize: '0.75rem' }}>
+                            Data: {dataOggi}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
 
               {/* TITOLO DEL DOCUMENTO */}
@@ -627,37 +666,45 @@ export const StampaProspettoCdModal: React.FC<Props> = ({
 
               {/* 4. VERBALE & FIRME DI APPROVAZIONE CONSIGLIO DIRETTIVO */}
               <div className="pt-3 border-top border-dark border-1">
-                <div className="row">
-                  <div className="col-7">
-                    <div className="small fw-bold text-dark mb-1">Delibera del Consiglio Direttivo:</div>
-                    <div className="small text-secondary" style={{ fontSize: '0.75rem' }}>
-                      Il presente prospetto economico-finanziario previsionale è stato esaminato e discusso:
-                    </div>
-                    <div className="mt-2 small text-dark">
-                      <span className="me-3">[ &nbsp; ] Approvato all'unanimità</span>
-                      <span className="me-3">[ &nbsp; ] Approvato a maggioranza</span>
-                      <span>[ &nbsp; ] Rinviato per modifiche</span>
-                    </div>
-                    <div className="mt-2 small text-muted" style={{ fontSize: '0.75rem' }}>
-                      Luogo e Data: __________________________, lì {dataOggi}
-                    </div>
-                  </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ width: '58%', verticalAlign: 'top', paddingRight: '15px' }}>
+                        <div className="small fw-bold text-dark mb-1">Delibera del Consiglio Direttivo:</div>
+                        <div className="small text-secondary" style={{ fontSize: '0.75rem' }}>
+                          Il presente prospetto economico-finanziario previsionale è stato esaminato e discusso:
+                        </div>
+                        <div className="mt-2 small text-dark">
+                          <span className="me-3">[ &nbsp; ] Approvato all'unanimità</span>
+                          <span className="me-3">[ &nbsp; ] Approvato a maggioranza</span>
+                          <span>[ &nbsp; ] Rinviato per modifiche</span>
+                        </div>
+                        <div className="mt-2 small text-muted" style={{ fontSize: '0.75rem' }}>
+                          Luogo e Data: __________________________, lì {dataOggi}
+                        </div>
+                      </td>
 
-                  <div className="col-5 text-end">
-                    <div className="row g-2">
-                      <div className="col-6 text-center">
-                        <div className="small text-muted" style={{ fontSize: '0.72rem' }}>Il Presidente del C.D.</div>
-                        <div className="border-bottom border-dark my-4"></div>
-                        <div className="small text-muted" style={{ fontSize: '0.7rem' }}>(Firma)</div>
-                      </div>
-                      <div className="col-6 text-center">
-                        <div className="small text-muted" style={{ fontSize: '0.72rem' }}>Il Tesoriere / Segretario</div>
-                        <div className="border-bottom border-dark my-4"></div>
-                        <div className="small text-muted" style={{ fontSize: '0.7rem' }}>(Firma)</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                      <td style={{ width: '42%', verticalAlign: 'top', textAlign: 'right' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <tbody>
+                            <tr>
+                              <td style={{ width: '50%', textAlign: 'center', verticalAlign: 'top', paddingRight: '8px' }}>
+                                <div className="small text-muted" style={{ fontSize: '0.72rem' }}>Il Presidente del C.D.</div>
+                                <div className="border-bottom border-dark my-4"></div>
+                                <div className="small text-muted" style={{ fontSize: '0.7rem' }}>(Firma)</div>
+                              </td>
+                              <td style={{ width: '50%', textAlign: 'center', verticalAlign: 'top', paddingLeft: '8px' }}>
+                                <div className="small text-muted" style={{ fontSize: '0.72rem' }}>Il Tesoriere / Segretario</div>
+                                <div className="border-bottom border-dark my-4"></div>
+                                <div className="small text-muted" style={{ fontSize: '0.7rem' }}>(Firma)</div>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
 
               {/* PIEDE DI PAGINA */}
