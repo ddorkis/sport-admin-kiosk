@@ -60,9 +60,9 @@ foreach ($anni as $a) {
         <a href="index.php?page=gestionale" class="btn btn-outline-secondary btn-sm shadow-sm">
             <i class="bi bi-arrow-left me-1"></i> Torna alla Dashboard
         </a>
-        <button class="btn btn-primary fw-bold btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNuovoAnno">
+        <a href="index.php?page=anno_nuovo" class="btn btn-primary fw-bold btn-sm shadow-sm">
             <i class="bi bi-plus-circle me-1"></i> Crea Nuova Stagione
-        </button>
+        </a>
     </div>
 </div>
 
@@ -101,9 +101,9 @@ foreach ($anni as $a) {
             <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-list-columns-reverse me-2 text-primary"></i>Elenco Stagioni Sportive Registrate</h5>
             <small class="text-muted">Passa da un anno all'altro per consultare gli archivi o avviare le nuove iscrizioni</small>
         </div>
-        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuovoAnno">
+        <a href="index.php?page=anno_nuovo" class="btn btn-sm btn-primary">
             <i class="bi bi-plus-lg me-1"></i> Nuova Stagione
-        </button>
+        </a>
     </div>
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
@@ -167,78 +167,5 @@ foreach ($anni as $a) {
         </table>
     </div>
 </div>
-
-<!-- MODAL: CREA NUOVO ANNO SPORTIVO -->
-<div class="modal fade" id="modalNuovoAnno" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 rounded-4 shadow-lg overflow-hidden">
-            <div class="modal-header bg-primary text-white p-3">
-                <h5 class="modal-title fw-bold"><i class="bi bi-calendar-plus me-2"></i>Nuova Stagione Sportiva</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="POST" action="index.php?action=salva_anno">
-                <input type="hidden" name="return_page" value="anni">
-                <div class="modal-body p-4 bg-light">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <label class="form-label small fw-bold text-muted mb-0 text-uppercase">Configurazione Rapida</label>
-                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="suggerisciProssimoAnno()">
-                            <i class="bi bi-magic me-1"></i> Suggerisci Anno Successivo
-                        </button>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Denominazione Anno Sportivo <span class="text-danger">*</span></label>
-                        <input type="text" name="anno" id="inputNomeAnno" class="form-control fw-bold" placeholder="Es. 2025/2026" required>
-                        <div class="form-text small">Utilizza il formato standard con barra (es. 2025/2026).</div>
-                    </div>
-
-                    <div class="row g-2 mb-3">
-                        <div class="col-6">
-                            <label class="form-label fw-bold">Data Inizio <span class="text-danger">*</span></label>
-                            <input type="date" name="data_inizio" id="inputDataInizio" class="form-control" value="<?= date('Y') ?>-09-01" required>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label fw-bold">Data Fine <span class="text-danger">*</span></label>
-                            <input type="date" name="data_fine" id="inputDataFine" class="form-control" value="<?= (int)date('Y')+1 ?>-06-30" required>
-                        </div>
-                    </div>
-
-                    <div class="form-check p-3 bg-white rounded-3 border">
-                        <input class="form-check-input ms-0 me-2" type="checkbox" name="attivo" value="1" id="checkAttivo" checked>
-                        <label class="form-check-label fw-bold text-dark" for="checkAttivo">
-                            Imposta subito come anno sportivo attivo di lavoro
-                        </label>
-                        <small class="text-muted d-block mt-1">
-                            Tutte le schermate del gestionale, le nuove quote e le iscrizioni utilizzeranno automaticamente questa stagione.
-                        </small>
-                    </div>
-                </div>
-                <div class="modal-footer bg-white border-top p-3">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
-                    <button type="submit" class="btn btn-primary fw-bold px-4">
-                        <i class="bi bi-check-lg me-1"></i> Salva Stagione
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<script>
-function suggerisciProssimoAnno() {
-    var d = new Date();
-    var y1 = d.getFullYear();
-    var y2 = y1 + 1;
-    // Se siamo già a Settembre o oltre, proponi anno successivo
-    if (d.getMonth() >= 7) {
-        y1 = y1 + 1;
-        y2 = y1 + 1;
-    }
-    document.getElementById('inputNomeAnno').value = y1 + '/' + y2;
-    document.getElementById('inputDataInizio').value = y1 + '-09-01';
-    document.getElementById('inputDataFine').value = y2 + '-06-30';
-    document.getElementById('checkAttivo').checked = true;
-}
-</script>
 
 <?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>

@@ -9,10 +9,15 @@ $db = getDbConnection();
 $utenti = $db->query("SELECT id, username, nome, ruolo, is_kiosk, attivo, created_at FROM utenti ORDER BY id ASC")->fetchAll();
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div>
         <h2 class="h3 fw-bold mb-0"><i class="bi bi-person-badge me-2 text-primary"></i>Gestione Utenti & Postazioni</h2>
         <p class="text-muted small mb-0">Profili operatore, amministratori e configurazione postazioni Kiosk reception</p>
+    </div>
+    <div>
+        <a href="index.php?page=utente_nuovo" class="btn btn-primary fw-bold shadow-sm">
+            <i class="bi bi-person-plus-fill me-1"></i> Nuovo Utente
+        </a>
     </div>
 </div>
 

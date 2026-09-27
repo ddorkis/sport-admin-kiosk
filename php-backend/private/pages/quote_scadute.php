@@ -67,7 +67,7 @@ $quoteScadute = $stmt->fetchAll();
                         <?php endif; ?>
                     </td>
                     <td class="text-end">
-                        <a href="index.php?page=pagamenti&paga_quota=<?= $q['id'] ?>" class="btn btn-sm btn-success fw-bold">
+                        <a href="index.php?page=pagamento_nuovo&quota_id=<?= $q['id'] ?>&tesserato_id=<?= $q['tesserato_id'] ?>&from=quote_scadute" class="btn btn-sm btn-success fw-bold">
                             <i class="bi bi-cash me-1"></i> Salda Ora
                         </a>
                     </td>

@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS `gruppi` (
   `data_inizio` DATE NOT NULL COMMENT 'Inizio corso/gruppo',
   `data_fine` DATE NOT NULL COMMENT 'Fine corso/gruppo',
   `istruttore` VARCHAR(100) NULL,
+  `attivo` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1=Attivo, 0=Disattivato/Terminato',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT `fk_gruppi_anno` FOREIGN KEY (`anno_id`) REFERENCES `anno` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -106,6 +107,7 @@ CREATE TABLE IF NOT EXISTS `quote` (
   `data_scadenza` DATE NOT NULL,
   `stato` ENUM('da_pagare', 'parziale', 'pagata', 'annullata') NOT NULL DEFAULT 'da_pagare',
   `mese_riferimento` VARCHAR(7) NULL COMMENT 'Formato YYYY-MM per evitare duplicati automatici',
+  `note` TEXT NULL COMMENT 'Note o motivazione annullamento/sgravio',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX `idx_quote_scadenza_stato` (`data_scadenza`, `stato`),
   CONSTRAINT `fk_quote_tesserato` FOREIGN KEY (`tesserato_id`) REFERENCES `tesserati` (`id`) ON DELETE CASCADE,

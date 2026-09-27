@@ -421,15 +421,13 @@ $elencoGruppi = $db->query("SELECT id, nome_gruppo FROM gruppi ORDER BY nome_gru
                             <td class="text-end">
                                 <div class="d-flex justify-content-end gap-1">
                                     <?php if ($q['stato'] !== 'pagata' && $q['stato'] !== 'annullata'): ?>
-                                        <button
-                                            type="button"
+                                        <a
+                                            href="index.php?page=pagamento_nuovo&quota_id=<?= $q['id'] ?>&tesserato_id=<?= $q['tesserato_id'] ?>&from=quote"
                                             class="btn btn-sm btn-success fw-bold"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#modalPagaQuota_<?= $q['id'] ?>"
                                             title="Registra Incasso Quota"
                                         >
                                             <i class="bi bi-wallet2 me-1"></i> Incassa
-                                        </button>
+                                        </a>
                                         <form method="POST" action="index.php?action=annulla_quota" class="d-inline" onsubmit="return confirm('Annullare questa quota (es. per ritiro atleta)?');">
                                             <input type="hidden" name="id" value="<?= $q['id'] ?>">
                                             <input type="hidden" name="redirect" value="quote">
@@ -443,60 +441,6 @@ $elencoGruppi = $db->query("SELECT id, nome_gruppo FROM gruppi ORDER BY nome_gru
                                 </div>
                             </td>
                         </tr>
-
-                        <!-- Modal Incasso Quota Specifica -->
-                        <?php if ($q['stato'] !== 'pagata' && $q['stato'] !== 'annullata'): ?>
-                            <div class="modal fade" id="modalPagaQuota_<?= $q['id'] ?>" tabindex="-1" aria-hidden="true">
-                                <div class="modal-dialog modal-dialog-centered">
-                                    <div class="modal-content border-0 rounded-4 shadow">
-                                        <div class="modal-header bg-success text-white">
-                                            <h5 class="modal-title fw-bold"><i class="bi bi-cash-coin me-2"></i>Registra Pagamento Quota</h5>
-                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                                        </div>
-                                        <form method="POST" action="index.php?action=registra_pagamento">
-                                            <input type="hidden" name="tesserato_id" value="<?= $q['tesserato_id'] ?>">
-                                            <input type="hidden" name="quota_id" value="<?= $q['id'] ?>">
-                                            <div class="modal-body p-4">
-                                                <div class="bg-light p-3 rounded-3 mb-3 small">
-                                                    <div><strong>Atleta:</strong> <?= htmlspecialchars($q['cognome'] . ' ' . $q['nome']) ?></div>
-                                                    <div><strong>Causale:</strong> <?= htmlspecialchars($q['causale']) ?></div>
-                                                    <div><strong>Importo Quota:</strong> € <?= number_format($q['importo'], 2) ?> | <strong>Residuo:</strong> <span class="text-danger fw-bold">€ <?= number_format($residuoQuota, 2) ?></span></div>
-                                                </div>
-
-                                                <div class="mb-3">
-                                                    <label class="form-label fw-bold">Importo da Incassare (€)</label>
-                                                    <input type="number" step="0.50" name="importo" class="form-control" value="<?= number_format($residuoQuota, 2, '.', '') ?>" max="<?= number_format($residuoQuota, 2, '.', '') ?>" required>
-                                                </div>
-
-                                                <div class="mb-3">
-                                                    <label class="form-label fw-bold">Metodo di Pagamento</label>
-                                                    <select name="metodo_pagamento" class="form-select" required>
-                                                        <option value="contanti">Contanti</option>
-                                                        <option value="pos">POS / Carta di Debito o Credito</option>
-                                                        <option value="bonifico">Bonifico Bancario</option>
-                                                        <option value="satispay">Satispay</option>
-                                                    </select>
-                                                </div>
-
-                                                <div class="mb-3">
-                                                    <label class="form-label fw-bold">Causale Ricevuta</label>
-                                                    <input type="text" name="causale" class="form-control" value="Incasso <?= htmlspecialchars($q['causale']) ?>" required>
-                                                </div>
-
-                                                <div class="mb-3">
-                                                    <label class="form-label fw-bold">Note Aggiuntive</label>
-                                                    <input type="text" name="note" class="form-control" placeholder="es. Saldo rate">
-                                                </div>
-                                            </div>
-                                            <div class="modal-footer bg-light">
-                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
-                                                <button type="submit" class="btn btn-success fw-bold"><i class="bi bi-check-lg me-1"></i> Conferma Incasso</button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
-                        <?php endif; ?>
                     <?php endforeach; endif; ?>
                 </tbody>
             </table>

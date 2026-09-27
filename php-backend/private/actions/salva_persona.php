@@ -81,8 +81,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $msg = 'creato';
         }
 
+        $returnPage = trim($_POST['return_page'] ?? '');
         if ($actionType === 'save_and_tessera') {
-            header("Location: index.php?page=tesserati&nuovo_tess=1&persona_id=" . $targetId . "&msg=" . $msg);
+            header("Location: index.php?page=tesseramento_nuovo&persona_id=" . $targetId . "&msg=" . $msg);
+        } elseif ($returnPage === 'kiosk') {
+            header("Location: index.php?page=kiosk&msg=" . $msg);
         } else {
             header("Location: index.php?page=persone&msg=" . $msg);
         }

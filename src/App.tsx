@@ -42,6 +42,7 @@ import { CodeExportModal } from './components/code_export/CodeExportModal';
 import { StampaDocumentoModal, TipoDocumentoStampa } from './components/modals/StampaDocumentoModal';
 import { DisiscrizioneAtletaModal } from './components/modals/DisiscrizioneAtletaModal';
 import { AnnullaQuotaModal } from './components/modals/AnnullaQuotaModal';
+import { DisattivaGruppoModal } from './components/modals/DisattivaGruppoModal';
 
 // Pagine di Inserimento a Schermo Intero (Nuova Navigazione Senza Dialog)
 import { NuovaPersonaPage } from './components/gestionale/NuovaPersonaPage';
@@ -84,6 +85,10 @@ export default function App() {
   // Ritiro Atleta / Disiscrizione e Annulla Quota
   const [disiscrizioneTesseratoId, setDisiscrizioneTesseratoId] = useState<number | null>(null);
   const [quotaToAnnullare, setQuotaToAnnullare] = useState<Quota | null>(null);
+
+  // Modifica e Disattivazione Gruppo
+  const [gruppoToEdit, setGruppoToEdit] = useState<Gruppo | null>(null);
+  const [gruppoToDisattivare, setGruppoToDisattivare] = useState<Gruppo | null>(null);
 
   // Stampa Documenti Ufficiali
   const [stampaModal, setStampaModal] = useState<{
@@ -439,6 +444,76 @@ export default function App() {
     }));
 
     showToast(`Nuovo gruppo ${nuovoGruppo.nome_gruppo} creato!`);
+  };
+
+  // Modifica Gruppo Esistente (Aggiornamento Nome o Parametri)
+  const handleUpdateGruppo = (updatedGruppo: Gruppo) => {
+    setData((prev) => ({
+      ...prev,
+      gruppi: prev.gruppi.map((g) => (g.id === updatedGruppo.id ? updatedGruppo : g))
+    }));
+
+    showToast(`Gruppo "${updatedGruppo.nome_gruppo}" aggiornato con successo!`);
+  };
+
+  // Disattivazione Gruppo con Sgravio Quote Future
+  const handleDisattivaGruppo = (params: {
+    gruppoId: number;
+    dataInterruzione: string;
+    annullaQuoteFuture: boolean;
+    motivo: string;
+    creaNuovoSubito: boolean;
+  }) => {
+    const grp = data.gruppi.find((g) => g.id === params.gruppoId);
+    if (!grp) return;
+
+    let countAnnullate = 0;
+    const updatedQuote = data.quote.map((q) => {
+      if (q.gruppo_id !== params.gruppoId) return q;
+      if (q.stato === 'pagata' || q.stato === 'annullata') return q;
+      if (params.annullaQuoteFuture && q.data_scadenza >= params.dataInterruzione) {
+        countAnnullate++;
+        return {
+          ...q,
+          stato: 'annullata' as const,
+          note: `Annullata per disattivazione/rimodulazione corso dal ${params.dataInterruzione} (${params.motivo})`
+        };
+      }
+      return q;
+    });
+
+    const updatedGruppi = data.gruppi.map((g) => {
+      if (g.id === params.gruppoId) {
+        return {
+          ...g,
+          attivo: false
+        };
+      }
+      return g;
+    });
+
+    setData((prev) => ({
+      ...prev,
+      gruppi: updatedGruppi,
+      quote: updatedQuote
+    }));
+
+    showToast(`Corso "${grp.nome_gruppo}" disattivato. ${countAnnullate} quote future sgravate.`);
+
+    if (params.creaNuovoSubito) {
+      setGruppoToEdit(null);
+      setActiveTab('nuovo_gruppo');
+    }
+  };
+
+  // Riattivazione Gruppo precedentemente disattivato
+  const handleRiattivaGruppo = (gruppoId: number) => {
+    const grp = data.gruppi.find((g) => g.id === gruppoId);
+    setData((prev) => ({
+      ...prev,
+      gruppi: prev.gruppi.map((g) => (g.id === gruppoId ? { ...g, attivo: true } : g))
+    }));
+    showToast(`Corso "${grp?.nome_gruppo || ''}" riattivato con successo!`);
   };
 
   // Registrazione Incasso / Saldo Quota
@@ -854,7 +929,10 @@ export default function App() {
                 anni={data.anni}
                 quote={data.quote}
                 onGeneraQuotePerGruppo={handleGeneraQuotePerGruppo}
-                onOpenNuovoGruppo={() => setActiveTab('nuovo_gruppo')}
+                onOpenNuovoGruppo={() => {
+                  setGruppoToEdit(null);
+                  setActiveTab('nuovo_gruppo');
+                }}
                 onOpenIscrizioneGruppo={() => {
                   setPreselectedTesseratoForGruppo(undefined);
                   setActiveTab('iscrizione_gruppo');
@@ -862,15 +940,32 @@ export default function App() {
                 onOpenDisiscrizione={(tessId) => {
                   setDisiscrizioneTesseratoId(tessId);
                 }}
+                onEditGruppo={(grp) => {
+                  setGruppoToEdit(grp);
+                  setActiveTab('nuovo_gruppo');
+                }}
+                onOpenDisattivaGruppo={(grp) => {
+                  setGruppoToDisattivare(grp);
+                }}
+                onRiattivaGruppo={handleRiattivaGruppo}
               />
             )}
 
             {activeTab === 'nuovo_gruppo' && (
               <NuovoGruppoPage
-                onBack={() => setActiveTab('gruppi')}
+                onBack={() => {
+                  setGruppoToEdit(null);
+                  setActiveTab('gruppi');
+                }}
                 anni={data.anni}
+                initialGruppo={gruppoToEdit}
                 onSave={(grp) => {
                   handleCreaNuovoGruppo(grp);
+                  setActiveTab('gruppi');
+                }}
+                onUpdate={(grp) => {
+                  handleUpdateGruppo(grp);
+                  setGruppoToEdit(null);
                   setActiveTab('gruppi');
                 }}
               />
@@ -1149,6 +1244,18 @@ export default function App() {
           />
         );
       })()}
+
+      {/* Modale Disattivazione Gruppo & Sgravio Quote Future */}
+      <DisattivaGruppoModal
+        isOpen={Boolean(gruppoToDisattivare)}
+        onClose={() => setGruppoToDisattivare(null)}
+        gruppo={gruppoToDisattivare}
+        gruppiTesserati={data.gruppi_tesserati}
+        quote={data.quote}
+        tesserati={data.tesserati}
+        persone={data.persone}
+        onConfirmDisattiva={handleDisattivaGruppo}
+      />
     </div>
   );
 }

@@ -23,8 +23,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $certificatoScadenza = !empty($_POST['certificato_medico_scadenza']) ? trim($_POST['certificato_medico_scadenza']) : null;
     $stato = $_POST['stato'] ?? 'Attivo';
 
+    $returnPage = trim($_POST['return_page'] ?? '');
+    $redirectPage = ($returnPage === 'kiosk') ? 'kiosk' : 'tesserati';
+
     if ($personaId <= 0 || empty($numeroTessera)) {
-        header('Location: index.php?page=tesserati&err=' . urlencode('Selezionare una persona e inserire il numero di tessera.'));
+        header("Location: index.php?page={$redirectPage}&err=" . urlencode('Selezionare una persona e inserire il numero di tessera.'));
         exit;
     }
 
@@ -33,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmtCheck = $db->prepare("SELECT id FROM tesserati WHERE persona_id = ? AND anno_id = ?");
         $stmtCheck->execute([$personaId, $annoId]);
         if ($stmtCheck->fetch()) {
-            header('Location: index.php?page=tesserati&err=' . urlencode('Questa persona risulta già tesserata per l\'anno sportivo selezionato.'));
+            header("Location: index.php?page={$redirectPage}&err=" . urlencode('Questa persona risulta già tesserata per l\'anno sportivo selezionato.'));
             exit;
         }
 
@@ -45,10 +48,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $personaId, $annoId, $numeroTessera, $dataTesseramento, $tipoTesseramento, $certificatoScadenza, $stato
         ]);
 
-        header('Location: index.php?page=tesserati&msg=' . urlencode('Tesseramento registrato con successo.'));
+        header("Location: index.php?page={$redirectPage}&msg=" . urlencode('Tesseramento registrato con successo.'));
         exit;
     } catch (Exception $e) {
-        header('Location: index.php?page=tesserati&err=' . urlencode('Errore salvataggio tesseramento: ' . $e->getMessage()));
+        header("Location: index.php?page={$redirectPage}&err=" . urlencode('Errore salvataggio tesseramento: ' . $e->getMessage()));
         exit;
     }
 }

@@ -119,12 +119,12 @@ $annoIdAttivo = (int)($annoAttivo['id'] ?? 1);
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link <?= ($page==='tesserati'?'active':'') ?>" href="index.php?page=tesserati">
+                    <a class="nav-link <?= (in_array($page, ['tesserati', 'tesseramento_nuovo', 'nuovo_tesseramento']) ? 'active' : '') ?>" href="index.php?page=tesserati">
                         <i class="bi bi-card-checklist me-2"></i> Tesserati
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link <?= ($page==='gruppi'?'active':'') ?>" href="index.php?page=gruppi">
+                    <a class="nav-link <?= (in_array($page, ['gruppi', 'gruppo_nuovo', 'nuovo_gruppo', 'iscrizione_gruppo', 'nuova_iscrizione_gruppo']) ? 'active' : '') ?>" href="index.php?page=gruppi">
                         <i class="bi bi-diagram-3 me-2"></i> Gruppi & Corsi
                     </a>
                 </li>
@@ -143,18 +143,18 @@ $annoIdAttivo = (int)($annoAttivo['id'] ?? 1);
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link <?= ($page==='pagamenti'?'active':'') ?>" href="index.php?page=pagamenti">
+                    <a class="nav-link <?= (in_array($page, ['pagamenti', 'pagamento_nuovo', 'nuovo_pagamento']) ? 'active' : '') ?>" href="index.php?page=pagamenti">
                         <i class="bi bi-wallet2 me-2"></i> Pagamenti
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link <?= ($page==='anni'?'active':'') ?>" href="index.php?page=anni">
+                    <a class="nav-link <?= (in_array($page, ['anni', 'anno_nuovo', 'nuovo_anno', 'nuova_stagione']) ? 'active' : '') ?>" href="index.php?page=anni">
                         <i class="bi bi-calendar-range me-2 text-warning"></i> Anno Sportivo & Stagioni
                         <span class="badge bg-white text-primary ms-auto" style="font-size: 0.65rem;"><?= htmlspecialchars($annoAttivo['anno']) ?></span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link <?= ($page==='utenti'?'active':'') ?>" href="index.php?page=utenti">
+                    <a class="nav-link <?= (in_array($page, ['utenti', 'utente_nuovo', 'nuovo_utente']) ? 'active' : '') ?>" href="index.php?page=utenti">
                         <i class="bi bi-person-gear me-2"></i> Utenti & Kiosk
                     </a>
                 </li>
@@ -210,13 +210,13 @@ $annoIdAttivo = (int)($annoAttivo['id'] ?? 1);
                 <ul class="nav flex-column mb-auto">
                     <li class="nav-item"><a class="nav-link text-white <?= ($page==='gestionale'?'fw-bold active bg-white bg-opacity-10 rounded':'') ?>" href="index.php?page=gestionale"><i class="bi bi-speedometer2 me-2"></i> Dashboard</a></li>
                     <li class="nav-item"><a class="nav-link text-white <?= (in_array($page, ['persone', 'persona_nuova', 'nuova_persona']) ? 'fw-bold active bg-white bg-opacity-10 rounded' : '') ?>" href="index.php?page=persone"><i class="bi bi-people me-2"></i> Persone & Tutori</a></li>
-                    <li class="nav-item"><a class="nav-link text-white <?= ($page==='tesserati'?'fw-bold active bg-white bg-opacity-10 rounded':'') ?>" href="index.php?page=tesserati"><i class="bi bi-card-checklist me-2"></i> Tesserati</a></li>
-                    <li class="nav-item"><a class="nav-link text-white <?= ($page==='gruppi'?'fw-bold active bg-white bg-opacity-10 rounded':'') ?>" href="index.php?page=gruppi"><i class="bi bi-diagram-3 me-2"></i> Gruppi & Corsi</a></li>
+                    <li class="nav-item"><a class="nav-link text-white <?= (in_array($page, ['tesserati', 'tesseramento_nuovo', 'nuovo_tesseramento']) ? 'fw-bold active bg-white bg-opacity-10 rounded' : '') ?>" href="index.php?page=tesserati"><i class="bi bi-card-checklist me-2"></i> Tesserati</a></li>
+                    <li class="nav-item"><a class="nav-link text-white <?= (in_array($page, ['gruppi', 'gruppo_nuovo', 'nuovo_gruppo', 'iscrizione_gruppo', 'nuova_iscrizione_gruppo']) ? 'fw-bold active bg-white bg-opacity-10 rounded' : '') ?>" href="index.php?page=gruppi"><i class="bi bi-diagram-3 me-2"></i> Gruppi & Corsi</a></li>
                     <li class="nav-item"><a class="nav-link text-white <?= ($page==='quote'||$page==='quote_scadute'?'fw-bold active bg-white bg-opacity-10 rounded':'') ?>" href="index.php?page=quote"><i class="bi bi-cash-stack me-2"></i> Quote Mensili</a></li>
                     <li class="nav-item"><a class="nav-link text-white <?= (in_array($page, ['previsioni', 'previsione', 'budget', 'spesa_nuova', 'nuova_spesa', 'spesa_modifica', 'sinottico_consiglio', 'sinottico_cd']) ? 'fw-bold active bg-white bg-opacity-10 rounded' : '') ?>" href="index.php?page=previsioni"><i class="bi bi-graph-up-arrow me-2 text-warning"></i> Previsione & Budget</a></li>
-                    <li class="nav-item"><a class="nav-link text-white <?= ($page==='pagamenti'?'fw-bold active bg-white bg-opacity-10 rounded':'') ?>" href="index.php?page=pagamenti"><i class="bi bi-wallet2 me-2"></i> Pagamenti</a></li>
-                    <li class="nav-item"><a class="nav-link text-white <?= ($page==='anni'?'fw-bold active bg-white bg-opacity-10 rounded':'') ?>" href="index.php?page=anni"><i class="bi bi-calendar-range me-2 text-warning"></i> Anno Sportivo & Stagioni</a></li>
-                    <li class="nav-item"><a class="nav-link text-white <?= ($page==='utenti'?'fw-bold active bg-white bg-opacity-10 rounded':'') ?>" href="index.php?page=utenti"><i class="bi bi-person-gear me-2"></i> Utenti & Kiosk</a></li>
+                    <li class="nav-item"><a class="nav-link text-white <?= (in_array($page, ['pagamenti', 'pagamento_nuovo', 'nuovo_pagamento']) ? 'fw-bold active bg-white bg-opacity-10 rounded' : '') ?>" href="index.php?page=pagamenti"><i class="bi bi-wallet2 me-2"></i> Pagamenti</a></li>
+                    <li class="nav-item"><a class="nav-link text-white <?= (in_array($page, ['anni', 'anno_nuovo', 'nuovo_anno', 'nuova_stagione']) ? 'fw-bold active bg-white bg-opacity-10 rounded' : '') ?>" href="index.php?page=anni"><i class="bi bi-calendar-range me-2 text-warning"></i> Anno Sportivo & Stagioni</a></li>
+                    <li class="nav-item"><a class="nav-link text-white <?= (in_array($page, ['utenti', 'utente_nuovo', 'nuovo_utente']) ? 'fw-bold active bg-white bg-opacity-10 rounded' : '') ?>" href="index.php?page=utenti"><i class="bi bi-person-gear me-2"></i> Utenti & Kiosk</a></li>
                     <li class="nav-item"><a class="nav-link text-white <?= (in_array($page, ['associazione', 'dati_associazione']) ? 'fw-bold active bg-white bg-opacity-10 rounded' : '') ?>" href="index.php?page=associazione"><i class="bi bi-building-gear me-2"></i> Dati Associazione</a></li>
                 </ul>
                 <div class="pt-3 border-top border-primary-subtle">

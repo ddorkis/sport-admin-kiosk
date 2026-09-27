@@ -43,20 +43,64 @@ php-backend/
 │       ├── gestionale.php      # Cruscotto principale con KPI e scadenze
 │       ├── kiosk.php           # Interfaccia semplificata Touch per Totem/Reception
 │       ├── persone.php         # Anagrafica atleti e tutori legali minorenni
+│       ├── persona_nuova.php   # Pagina dedicata: Inserimento e modifica persona & tutore
 │       ├── tesserati.php       # Registro tesserati, numeri tessera e visite mediche
+│       ├── tesseramento_nuovo.php # Pagina dedicata: Nuovo tesseramento sportivo
 │       ├── gruppi.php          # Configurazione corsi, orari e quote mensili
+│       ├── gruppo_nuovo.php    # Pagina dedicata: Creazione nuovo gruppo / corso
+│       ├── iscrizione_gruppo.php # Pagina dedicata: Iscrizione atleta a gruppo e calcolo rate
 │       ├── quote.php           # Scadenziario completo quote con filtri
 │       ├── quote_scadute.php   # Registro solleciti e insoluti
-│       ├── pagamenti.php       # Registrazione incassi e quietanze
-│       ├── anni.php            # Stagioni sportive
+│       ├── previsioni.php      # Previsione entrate quote e budget spese con simulatore
+│       ├── spesa_nuova.php     # Pagina dedicata: Inserimento e modifica spesa a budget
+│       ├── sinottico_consiglio.php # Pagina dedicata: Prospetto finanziario e verbale per il CD
+│       ├── pagamenti.php       # Registro incassi e quietanze
+│       ├── pagamento_nuovo.php # Pagina dedicata: Registrazione incasso con quietanza
+│       ├── anni.php            # Stagioni sportive e selezione anno attivo
+│       ├── anno_nuovo.php      # Pagina dedicata: Creazione nuova stagione sportiva
 │       ├── utenti.php          # Gestione operatori e postazioni
+│       ├── utente_nuovo.php    # Pagina dedicata: Creazione profilo utente / kiosk
+│       ├── associazione.php    # Dati societari ASD, affiliazioni ed EPS
 │       └── 404.php             # Errore pagina non trovata
 │   └── actions/
-│       ├── genera_quote.php    # Algoritmo automatico calcolo scadenze
-│       ├── registra_pagamento.php # Incasso quote o pagamenti liberi
-│       └── salva_persona.php   # Creazione anagrafica persona e tutore
+│       ├── salva_anno.php          # Creazione e switch anno sportivo attivo
+│       ├── salva_persona.php       # Creazione e aggiornamento anagrafica persona & tutore
+│       ├── elimina_persona.php     # Archiviazione logica persona
+│       ├── salva_tesseramento.php  # Registrazione o rinnovo tesseramento sportivo
+│       ├── salva_gruppo.php        # Creazione e modifica corso / gruppo (rinomina senza toccare quote)
+│       ├── disattiva_gruppo.php    # Disattivazione corso & sgravio automatico quote future non saldate
+│       ├── riattiva_gruppo.php     # Riattivazione corso terminato
+│       ├── elimina_gruppo.php      # Eliminazione corso
+│       ├── iscrivi_gruppo.php      # Iscrizione tesserato a corso e generazione rate
+│       ├── disiscrivi_gruppo.php   # Disiscrizione tesserato e annullamento quote future
+│       ├── genera_quote.php        # Algoritmo automatico calcolo scadenziario quote
+│       ├── registra_pagamento.php  # Incasso quote o pagamenti liberi con quietanza
+│       ├── annulla_quota.php       # Annullamento contabile singola rata per esonero/ritiro
+│       ├── salva_spesa.php         # Inserimento o modifica spesa a bilancio previsionale
+│       ├── elimina_spesa.php       # Eliminazione spesa dal bilancio previsionale
+│       ├── salva_utente.php        # Gestione operatori e postazioni kiosk reception
+│       └── salva_associazione.php  # Configurazione anagrafica societaria, FISR ed EPS
 └── README.md
 ```
+
+---
+
+## 📌 Gestione Corsi: Rinomina Nome vs Variazione Quota/Tariffa
+
+Il gestionale adotta le migliori pratiche contabili per preservare la tracciabilità delle rate e delle ricevute:
+
+1. **Rinominare un gruppo (solo il nome / orari / note)**:
+   - Dalla pagina **Gruppi & Corsi** (`index.php?page=gruppi`), cliccare su **Modifica** (`index.php?page=gruppo_nuovo&id=...`).
+   - È possibile modificare liberamente il nome del gruppo, l'istruttore, gli orari e le note descrittive.
+   - Tutte le quote precedentemente emesse, pagate o ancora da incassare restano valide e tracciate con la loro causale originaria.
+
+2. **Variare l'importo o la quota mensile a stagione in corso**:
+   - Per non sovrascrivere retroattivamente le quote storiche o già saldate dagli atleti, utilizzare la procedura guidata **Disattiva Corso & Sgravio Quote Future** (`index.php?action=disattiva_gruppo`).
+   - Il sistema:
+     - Imposta il corso come disattivato (`attivo = 0`);
+     - Annulla automaticamente con causale esplicativa tutte le rate future non saldate a partire dalla data di interruzione indicata;
+     - Preserva tutte le quote già incassate e le ricevute storiche a bilancio;
+     - Reindirizza alla creazione del **Nuovo Gruppo** (`index.php?page=gruppo_nuovo`) per inserire il nuovo importo aggiornato e procedere con le nuove iscrizioni.
 
 ---
 

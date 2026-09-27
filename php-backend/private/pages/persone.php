@@ -206,7 +206,7 @@ $err = $_GET['err'] ?? '';
                             <a href="index.php?page=persona_nuova&id=<?= $p['id'] ?>" class="btn btn-outline-primary" title="Modifica Scheda Anagrafica">
                                 <i class="bi bi-pencil"></i> Modifica
                             </a>
-                            <a href="index.php?page=tesserati&nuovo_tess=1&persona_id=<?= $p['id'] ?>" class="btn btn-outline-success <?= $isArchived ? 'disabled' : '' ?>" title="Registra Tesseramento">
+                            <a href="index.php?page=tesseramento_nuovo&persona_id=<?= $p['id'] ?>" class="btn btn-outline-success <?= $isArchived ? 'disabled' : '' ?>" title="Registra Tesseramento">
                                 <i class="bi bi-card-checklist"></i> Tessera
                             </a>
                             <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalPrivacy<?= $p['id'] ?>" title="Gestione Privacy, Archiviazione o Eliminazione GDPR">

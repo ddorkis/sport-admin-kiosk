@@ -59,38 +59,38 @@
     <div class="row g-4 mb-4">
         <!-- 1. Inserimento Persona e Tutore -->
         <div class="col-md-6 col-lg-3">
-            <button class="btn btn-primary w-100 kiosk-btn" data-bs-toggle="modal" data-bs-target="#modalNuovaPersona">
+            <a href="index.php?page=persona_nuova&from=kiosk" class="btn btn-primary w-100 kiosk-btn text-decoration-none">
                 <i class="bi bi-person-plus-fill kiosk-icon"></i>
                 <span>Nuova Persona</span>
                 <small class="fw-normal text-white-50 fs-6 mt-1">Anagrafica & Tutore Minorenni</small>
-            </button>
+            </a>
         </div>
 
         <!-- 2. Nuovo Tesseramento -->
         <div class="col-md-6 col-lg-3">
-            <button class="btn btn-success w-100 kiosk-btn" data-bs-toggle="modal" data-bs-target="#modalTesseramento">
+            <a href="index.php?page=tesseramento_nuovo&from=kiosk" class="btn btn-success w-100 kiosk-btn text-decoration-none">
                 <i class="bi bi-card-heading kiosk-icon"></i>
                 <span>Tesseramento</span>
                 <small class="fw-normal text-white-50 fs-6 mt-1">Assegna Anno e Tessera</small>
-            </button>
+            </a>
         </div>
 
         <!-- 3. Registra Pagamento Rapido -->
         <div class="col-md-6 col-lg-3">
-            <button class="btn btn-warning text-dark w-100 kiosk-btn" data-bs-toggle="modal" data-bs-target="#modalPagamentoRapido">
+            <a href="index.php?page=pagamento_nuovo&from=kiosk" class="btn btn-warning text-dark w-100 kiosk-btn text-decoration-none">
                 <i class="bi bi-cash-coin kiosk-icon"></i>
                 <span>Registra Pagamento</span>
                 <small class="fw-normal text-dark-50 fs-6 mt-1">Quota mensile o cassa libera</small>
-            </button>
+            </a>
         </div>
 
         <!-- 4. Cerca Anagrafica / Stato Atleta -->
         <div class="col-md-6 col-lg-3">
-            <button class="btn btn-info text-white w-100 kiosk-btn" data-bs-toggle="modal" data-bs-target="#modalCercaAnagrafica">
+            <a href="index.php?page=persone" class="btn btn-info text-white w-100 kiosk-btn text-decoration-none">
                 <i class="bi bi-search kiosk-icon"></i>
                 <span>Cerca Anagrafica</span>
                 <small class="fw-normal text-white-50 fs-6 mt-1">Stato quote e pagamenti</small>
-            </button>
+            </a>
         </div>
     </div>
 </div>

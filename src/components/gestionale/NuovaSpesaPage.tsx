@@ -109,6 +109,7 @@ export const NuovaSpesaPage: React.FC<Props> = ({
 
     onSave(
       {
+        anno_id: initialSpesa?.anno_id ?? annoAttivo?.id ?? 1,
         titolo: titolo.trim(),
         categoria,
         importo_mensile: importo,

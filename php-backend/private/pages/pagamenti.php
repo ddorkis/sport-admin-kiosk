@@ -34,10 +34,15 @@ $stmt->execute($params);
 $pagamenti = $stmt->fetchAll();
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div>
         <h2 class="h3 fw-bold mb-0"><i class="bi bi-wallet2 me-2 text-success"></i>Registro Incassi & Pagamenti</h2>
         <p class="text-muted small mb-0">Elenco delle quietanze e ricevute emesse per quote e corsi</p>
+    </div>
+    <div>
+        <a href="index.php?page=pagamento_nuovo" class="btn btn-success fw-bold shadow-sm">
+            <i class="bi bi-plus-lg me-1"></i> Registra Incasso
+        </a>
     </div>
 </div>
 

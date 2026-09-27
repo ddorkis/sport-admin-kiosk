@@ -84,6 +84,7 @@ export interface Gruppo {
   data_inizio: string; // YYYY-MM-DD
   data_fine: string; // YYYY-MM-DD
   istruttore: string;
+  attivo?: boolean; // Se false = corso disattivato / terminato
 }
 
 export interface GruppoTesserato {

@@ -243,7 +243,8 @@ export const INITIAL_GRUPPI: Gruppo[] = [
     giorno_scadenza_mensile: 10,
     data_inizio: '2024-09-01',
     data_fine: '2025-05-31',
-    istruttore: 'Maestra Elena Riva'
+    istruttore: 'Maestra Elena Riva',
+    attivo: true
   },
   {
     id: 2,
@@ -255,7 +256,8 @@ export const INITIAL_GRUPPI: Gruppo[] = [
     giorno_scadenza_mensile: 10,
     data_inizio: '2024-09-01',
     data_fine: '2025-05-31',
-    istruttore: 'Tecnico Federale FISR Roberto Conti'
+    istruttore: 'Tecnico Federale FISR Roberto Conti',
+    attivo: true
   },
   {
     id: 3,
@@ -267,7 +269,8 @@ export const INITIAL_GRUPPI: Gruppo[] = [
     giorno_scadenza_mensile: 10,
     data_inizio: '2024-09-01',
     data_fine: '2025-05-31',
-    istruttore: 'Coach Silvia Moretti (FISR Livello 3)'
+    istruttore: 'Coach Silvia Moretti (FISR Livello 3)',
+    attivo: true
   },
   {
     id: 4,
@@ -279,7 +282,8 @@ export const INITIAL_GRUPPI: Gruppo[] = [
     giorno_scadenza_mensile: 15,
     data_inizio: '2024-09-15',
     data_fine: '2025-06-15',
-    istruttore: 'Coreografa Laura Bellini'
+    istruttore: 'Coreografa Laura Bellini',
+    attivo: true
   }
 ];
 

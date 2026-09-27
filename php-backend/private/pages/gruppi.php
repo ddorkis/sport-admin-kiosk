@@ -14,7 +14,9 @@ $annoAttivoId = $annoAttivo['id'] ?? ($anni[0]['id'] ?? 1);
 $stmt = $db->prepare("
     SELECT g.*, a.anno,
            (SELECT COUNT(*) FROM gruppi_tesserati gt WHERE gt.gruppo_id = g.id) AS num_iscritti,
-           (SELECT COUNT(*) FROM quote q WHERE q.gruppo_id = g.id AND q.stato != 'annullata') AS num_quote
+           (SELECT COUNT(*) FROM quote q WHERE q.gruppo_id = g.id AND q.stato != 'annullata') AS num_quote,
+           (SELECT COUNT(*) FROM quote q WHERE q.gruppo_id = g.id AND q.stato = 'annullata') AS num_quote_annullate,
+           (SELECT COUNT(*) FROM quote q WHERE q.gruppo_id = g.id AND q.stato IN ('da_pagare', 'parziale')) AS num_quote_aperte
     FROM gruppi g
     INNER JOIN anno a ON g.anno_id = a.id
     ORDER BY g.id DESC
@@ -56,25 +58,42 @@ foreach ($tuttiIscritti as $isc) {
             <i class="bi bi-diagram-3 text-primary me-2"></i> Gestione Gruppi & Corsi Annuali
         </h2>
         <p class="text-muted small mb-0">
-            Configurazione corsi sportivi e generazione quote automatiche mensili per il periodo di attività
+            Configurazione corsi sportivi, anagrafica squadre e automazione quote mensili per il periodo di attività
         </p>
     </div>
     <div class="d-flex gap-2">
-        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalIscriviGruppo">
+        <a href="index.php?page=iscrizione_gruppo" class="btn btn-outline-primary">
             <i class="bi bi-person-plus me-1"></i> Iscrivi Atleta a Gruppo
-        </button>
-        <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNuovoGruppo">
+        </a>
+        <a href="index.php?page=gruppo_nuovo" class="btn btn-primary fw-bold shadow-sm">
             <i class="bi bi-plus-lg me-1"></i> Crea Nuovo Gruppo
-        </button>
+        </a>
     </div>
 </div>
 
-<!-- Banner Informativo Automatismo Quote -->
-<div class="alert alert-info border-info d-flex align-items-center mb-4 shadow-sm p-3 rounded-3">
-    <i class="bi bi-gear-wide-connected fs-2 me-3 text-primary flex-shrink-0"></i>
-    <div class="small">
-        <strong>Automatismo Quote Mensili:</strong> Ogni gruppo ha una data di inizio, una data di fine e una quota mensile.
-        Quando un atleta viene iscritto al gruppo (o quando clicchi su <em>"Genera Quote"</em>), il sistema calcola e inserisce automaticamente tutte le rate mensili dal mese di inizio al mese di fine, con scadenza al giorno mensile indicato.
+<!-- Guida Rapida: Modifica Nome vs Variazione Importo -->
+<div class="alert alert-light border shadow-sm p-3 rounded-3 mb-4">
+    <div class="d-flex align-items-start gap-3">
+        <div class="p-2 bg-primary-subtle text-primary rounded-3 flex-shrink-0">
+            <i class="bi bi-lightbulb-fill fs-4"></i>
+        </div>
+        <div class="small text-secondary">
+            <strong class="text-dark d-block mb-1">
+                Guida Amministrativa: Rinominare un Gruppo vs Variare l'Importo della Quota
+            </strong>
+            <div class="row g-2 mt-1">
+                <div class="col-md-6">
+                    <span class="badge bg-primary text-white me-1">Solo Cambio Nome / Dati</span>
+                    Vuoi correggere o aggiornare il nome, la descrizione o l'istruttore del corso? Clicca su 
+                    <strong>"Modifica"</strong>. Il gruppo viene rinominato istantaneamente e tutte le quote già emesse o saldate mantengono il loro storico intatto.
+                </div>
+                <div class="col-md-6">
+                    <span class="badge bg-warning text-dark me-1">Variazione Importo a Stagione In Corso</span>
+                    Se intendi applicare una nuova tariffa (es. da € 50 a € 65/mese), la regola contabile corretta è cliccare su 
+                    <strong>"Disattiva & Quote"</strong>: il corso viene chiuso, le rate future non pagate vengono sgravate in automatico, e crei subito il nuovo gruppo con il nuovo importo.
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -85,9 +104,9 @@ foreach ($tuttiIscritti as $isc) {
         <h5>Nessun gruppo o corso configurato</h5>
         <p class="small mb-3">Crea il tuo primo gruppo sportivo per organizzare atleti, rate mensili e istruttori.</p>
         <div>
-            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuovoGruppo">
+            <a href="index.php?page=gruppo_nuovo" class="btn btn-primary">
                 <i class="bi bi-plus-lg me-1"></i> Crea Nuovo Gruppo
-            </button>
+            </a>
         </div>
     </div>
 <?php else: ?>
@@ -96,14 +115,26 @@ foreach ($tuttiIscritti as $isc) {
             <?php 
                 $iscrittiGruppo = $iscrittiPerGruppo[$g['id']] ?? [];
                 $numIscritti = count($iscrittiGruppo);
+                $isAttivo = isset($g['attivo']) ? (bool)$g['attivo'] : true;
             ?>
             <div class="col-12 col-md-6 col-xl-4">
-                <div class="card border-0 shadow-sm rounded-4 h-100 bg-white d-flex flex-column">
+                <div class="card border-0 shadow-sm rounded-4 h-100 bg-white d-flex flex-column <?= !$isAttivo ? 'opacity-75 border border-dashed' : '' ?>">
                     <div class="card-header bg-white border-0 pt-4 px-4 pb-0 d-flex justify-content-between align-items-start">
                         <div>
-                            <span class="badge bg-primary-subtle text-primary mb-2 px-2 py-1">
-                                <?= htmlspecialchars($g['categoria'] ?: 'Corso Sportivo') ?>
-                            </span>
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="badge bg-primary-subtle text-primary px-2 py-1">
+                                    <?= htmlspecialchars($g['categoria'] ?: 'Corso Sportivo') ?>
+                                </span>
+                                <?php if ($isAttivo): ?>
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                        <i class="bi bi-check-circle me-1"></i> Attivo
+                                    </span>
+                                <?php else: ?>
+                                    <span class="badge bg-secondary-subtle text-secondary border">
+                                        <i class="bi bi-pause-circle me-1"></i> Disattivato
+                                    </span>
+                                <?php endif; ?>
+                            </div>
                             <h5 class="fw-bold text-dark mb-1"><?= htmlspecialchars($g['nome_gruppo']) ?></h5>
                         </div>
                         <div class="text-end">
@@ -141,29 +172,65 @@ foreach ($tuttiIscritti as $isc) {
                             <span>
                                 <i class="bi bi-receipt me-1 text-secondary"></i>
                                 <strong><?= (int)$g['num_quote'] ?></strong> quote attive
+                                <?php if (!empty($g['num_quote_annullate'])): ?>
+                                    <span class="text-danger ms-1">(<?= (int)$g['num_quote_annullate'] ?> sgravate)</span>
+                                <?php endif; ?>
                             </span>
                         </div>
                     </div>
 
                     <div class="card-footer bg-white border-top p-3 d-flex flex-wrap gap-2">
+                        <!-- Elenco Iscritti -->
                         <button
                             type="button"
                             class="btn btn-outline-secondary btn-sm flex-fill"
                             data-bs-toggle="modal"
                             data-bs-target="#modalIscritti_<?= $g['id'] ?>"
                         >
-                            <i class="bi bi-list-ul me-1"></i> Elenco Iscritti (<?= $numIscritti ?>)
+                            <i class="bi bi-list-ul me-1"></i> Iscritti (<?= $numIscritti ?>)
                         </button>
 
+                        <!-- Modifica Nome e Dati -->
                         <a
-                            href="index.php?action=genera_quote&gruppo_id=<?= $g['id'] ?>&redirect=gruppi"
-                            class="btn btn-outline-primary btn-sm flex-fill fw-bold"
-                            title="Calcola e inserisce automaticamente le quote mensili per tutti gli iscritti"
-                            onclick="return confirm('Generare/sincronizzare tutte le rate mensili per gli iscritti di questo gruppo?');"
+                            href="index.php?page=gruppo_nuovo&id=<?= $g['id'] ?>"
+                            class="btn btn-outline-primary btn-sm flex-fill fw-semibold"
+                            title="Modifica nome, orari o dettagli del corso"
                         >
-                            <i class="bi bi-lightning-charge me-1"></i> Genera Quote
+                            <i class="bi bi-pencil me-1"></i> Modifica
                         </a>
 
+                        <?php if ($isAttivo): ?>
+                            <!-- Genera Quote -->
+                            <a
+                                href="index.php?action=genera_quote&gruppo_id=<?= $g['id'] ?>&redirect=gruppi"
+                                class="btn btn-primary btn-sm flex-fill fw-bold"
+                                title="Calcola e inserisce automaticamente le quote mensili per tutti gli iscritti"
+                                onclick="return confirm('Generare/sincronizzare tutte le rate mensili per gli iscritti di questo gruppo?');"
+                            >
+                                <i class="bi bi-lightning-charge me-1"></i> Genera Quote
+                            </a>
+
+                            <!-- Disattiva & Quote Future -->
+                            <button
+                                type="button"
+                                class="btn btn-outline-warning btn-sm"
+                                data-bs-toggle="modal"
+                                data-bs-target="#modalDisattivaGruppo_<?= $g['id'] ?>"
+                                title="Disattiva corso e sgrova le rate future non saldate"
+                            >
+                                <i class="bi bi-pause-circle me-1"></i> Disattiva & Quote
+                            </button>
+                        <?php else: ?>
+                            <!-- Riattiva -->
+                            <form method="POST" action="index.php?action=riattiva_gruppo" class="d-inline flex-fill">
+                                <input type="hidden" name="gruppo_id" value="<?= $g['id'] ?>">
+                                <button type="submit" class="btn btn-outline-success btn-sm w-100" title="Riattiva questo corso">
+                                    <i class="bi bi-play-circle me-1"></i> Riattiva Corso
+                                </button>
+                            </form>
+                        <?php endif; ?>
+
+                        <!-- Elimina -->
                         <form method="POST" action="index.php?action=elimina_gruppo" class="d-inline" onsubmit="return confirm('Sei sicuro di voler eliminare il gruppo <?= htmlspecialchars(addslashes($g['nome_gruppo'])) ?>? Verranno rimosse le iscrizioni associate.');">
                             <input type="hidden" name="id" value="<?= $g['id'] ?>">
                             <button type="submit" class="btn btn-outline-danger btn-sm px-2" title="Elimina Gruppo">
@@ -173,6 +240,79 @@ foreach ($tuttiIscritti as $isc) {
                     </div>
                 </div>
             </div>
+
+            <!-- Modal Disattivazione Gruppo & Sgravio Quote Future -->
+            <?php if ($isAttivo): ?>
+                <div class="modal fade" id="modalDisattivaGruppo_<?= $g['id'] ?>" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered modal-lg">
+                        <div class="modal-content border-0 rounded-4 shadow-lg overflow-hidden">
+                            <div class="modal-header bg-warning text-dark py-3 px-4">
+                                <h5 class="modal-title fw-bold d-flex align-items-center mb-0">
+                                    <i class="bi bi-pause-circle-fill me-2 fs-4"></i>
+                                    Disattivazione Corso & Gestione Quote Future
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <form method="POST" action="index.php?action=disattiva_gruppo">
+                                <input type="hidden" name="gruppo_id" value="<?= $g['id'] ?>">
+                                <div class="modal-body p-4">
+                                    <div class="alert alert-info border-info d-flex align-items-start p-3 rounded-3 mb-4 shadow-sm">
+                                        <i class="bi bi-info-circle-fill fs-3 text-primary me-3 flex-shrink-0 mt-1"></i>
+                                        <div class="small">
+                                            <strong class="d-block mb-1 fs-6">Procedura Corretta di Variazione Importo:</strong>
+                                            Stai per disattivare il corso <strong>"<?= htmlspecialchars($g['nome_gruppo']) ?>"</strong>.
+                                            Lo storico e i pagamenti già effettuati rimarranno registrati e intatti.
+                                            Contestualmente puoi <strong>annullare in massa tutte le quote future non saldate</strong> a partire da una data a tua scelta, e poi creare subito il nuovo gruppo con il nuovo importo.
+                                        </div>
+                                    </div>
+
+                                    <div class="row g-3 mb-4">
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold text-dark">
+                                                <i class="bi bi-calendar-x me-1 text-danger"></i> Data Decorrenza Disattivazione *
+                                            </label>
+                                            <input type="date" name="data_interruzione" class="form-control form-control-lg fw-semibold" value="<?= date('Y-m-d') ?>" required>
+                                            <div class="form-text small">Le quote con scadenza pari o successiva a tale data verranno sgravate.</div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold text-dark">
+                                                <i class="bi bi-chat-left-text me-1 text-secondary"></i> Motivo Sgravio Quote
+                                            </label>
+                                            <input type="text" name="motivo" class="form-control form-control-lg" value="Rimodulazione corso per variazione tariffa" required>
+                                            <div class="form-text small">Annotato sulle note di ciascuna quota annullata.</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="card border-warning-subtle bg-warning-subtle bg-opacity-25 rounded-3 mb-4 p-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" role="switch" id="chkAnnullaQuote_<?= $g['id'] ?>" name="annulla_quote_future" value="1" checked>
+                                            <label class="form-check-label fw-bold text-dark" for="chkAnnullaQuote_<?= $g['id'] ?>">
+                                                Annulla automaticamente tutte le quote non ancora saldate (da pagare / parziali) dal giorno specificato in poi
+                                            </label>
+                                            <div class="text-muted small ps-4">
+                                                Attualmente vi sono <strong><?= (int)$g['num_quote_aperte'] ?></strong> quote aperte per questo corso.
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-check form-switch p-3 bg-light rounded-3 border">
+                                        <input class="form-check-input ms-0 me-3" type="checkbox" role="switch" id="chkCreaNuovo_<?= $g['id'] ?>" name="crea_nuovo" value="1" checked>
+                                        <label class="form-check-label fw-bold text-dark" for="chkCreaNuovo_<?= $g['id'] ?>">
+                                            <i class="bi bi-plus-circle text-primary me-1"></i> Apri subito la schermata per creare il nuovo gruppo con il nuovo importo
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="modal-footer bg-light px-4 py-3 d-flex justify-content-between">
+                                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annulla</button>
+                                    <button type="submit" class="btn btn-danger fw-bold shadow-sm px-4">
+                                        <i class="bi bi-check-lg me-1"></i> Conferma Disattivazione Corso
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
 
             <!-- Modal Elenco Iscritti Gruppo -->
             <div class="modal fade" id="modalIscritti_<?= $g['id'] ?>" tabindex="-1" aria-hidden="true">
@@ -244,143 +384,5 @@ foreach ($tuttiIscritti as $isc) {
         <?php endforeach; ?>
     </div>
 <?php endif; ?>
-
-<!-- MODAL: CREA NUOVO GRUPPO -->
-<div class="modal fade" id="modalNuovoGruppo" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content border-0 rounded-4 shadow">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title fw-bold">
-                    <i class="bi bi-plus-circle me-2"></i> Crea Nuovo Gruppo o Corso Sportivo
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="POST" action="index.php?action=salva_gruppo">
-                <div class="modal-body p-4">
-                    <div class="row g-3">
-                        <div class="col-md-8">
-                            <label class="form-label fw-bold">Nome Gruppo / Corso <span class="text-danger">*</span></label>
-                            <input type="text" name="nome_gruppo" class="form-control" placeholder="es. Basket Under 14 Maschile, Pattinaggio Base" required>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold">Anno Sportivo <span class="text-danger">*</span></label>
-                            <select name="anno_id" class="form-select" required>
-                                <?php foreach ($anni as $a): ?>
-                                    <option value="<?= $a['id'] ?>" <?= (!empty($a['attivo']) ? 'selected' : '') ?>><?= htmlspecialchars($a['anno']) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">Categoria Disciplina</label>
-                            <input type="text" name="categoria" class="form-control" placeholder="es. Giovanile, Avviamento, Agonistica">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">Istruttore / Allenatore Responsabile</label>
-                            <input type="text" name="istruttore" class="form-control" placeholder="es. Coach Marco Rossi">
-                        </div>
-
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">Quota Mensile Richiesta (€) <span class="text-danger">*</span></label>
-                            <div class="input-group">
-                                <span class="input-group-text">€</span>
-                                <input type="number" step="0.50" name="quota_mensile" class="form-control" value="60.00" required>
-                                <span class="input-group-text">/ mese</span>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">Giorno di Scadenza Rate <span class="text-danger">*</span></label>
-                            <div class="input-group">
-                                <span class="input-group-text">Ogni</span>
-                                <input type="number" min="1" max="28" name="giorno_scadenza_mensile" class="form-control" value="10" required>
-                                <span class="input-group-text">del mese</span>
-                            </div>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">Data Inizio Corso <span class="text-danger">*</span></label>
-                            <input type="date" name="data_inizio" class="form-control" value="2024-09-01" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">Data Fine Corso <span class="text-danger">*</span></label>
-                            <input type="date" name="data_fine" class="form-control" value="2025-05-31" required>
-                        </div>
-
-                        <div class="col-12">
-                            <label class="form-label fw-bold">Descrizione / Giorni e Orari Allenamento</label>
-                            <textarea name="descrizione" class="form-control" rows="2" placeholder="es. Allenamenti Lunedì e Mercoledì dalle 17:00 alle 18:30 presso Palazzetto dello Sport"></textarea>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer bg-light">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
-                    <button type="submit" class="btn btn-primary fw-bold"><i class="bi bi-check-lg me-1"></i> Salva e Crea Gruppo</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- MODAL: ISCRIVI ATLETA A GRUPPO -->
-<div class="modal fade" id="modalIscriviGruppo" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 rounded-4 shadow">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title fw-bold">
-                    <i class="bi bi-person-plus me-2"></i> Iscrivi Atleta a Gruppo
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="POST" action="index.php?action=iscrivi_gruppo">
-                <div class="modal-body p-4">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Seleziona Corso / Gruppo <span class="text-danger">*</span></label>
-                        <select name="gruppo_id" class="form-select" required>
-                            <option value="">-- Seleziona un gruppo --</option>
-                            <?php foreach ($gruppi as $g): ?>
-                                <option value="<?= $g['id'] ?>">
-                                    <?= htmlspecialchars($g['nome_gruppo']) ?> (€ <?= number_format($g['quota_mensile'], 2) ?>/mese)
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Seleziona Atleta Tesserato <span class="text-danger">*</span></label>
-                        <select name="tesserato_id" class="form-select" required>
-                            <option value="">-- Seleziona atleta --</option>
-                            <?php foreach ($tesseratiAttivi as $t): ?>
-                                <option value="<?= $t['tesserato_id'] ?>">
-                                    <?= htmlspecialchars($t['cognome'] . ' ' . $t['nome']) ?> (Tessera: <?= htmlspecialchars($t['numero_tessera']) ?><?= $t['is_minorenne'] ? ' - Minorenne' : '' ?>)
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Data Iscrizione</label>
-                        <input type="date" name="data_iscrizione" class="form-control" value="<?= date('Y-m-d') ?>" required>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Note Iscrizione</label>
-                        <input type="text" name="note" class="form-control" placeholder="es. Iscrizione con prova completata">
-                    </div>
-
-                    <div class="form-check p-3 bg-light rounded-3">
-                        <input class="form-check-input" type="checkbox" name="genera_quote" value="1" id="checkGeneraQuote" checked>
-                        <label class="form-check-label small fw-bold" for="checkGeneraQuote">
-                            Genera subito automaticamente tutte le rate mensili del corso per questo atleta
-                        </label>
-                    </div>
-                </div>
-                <div class="modal-footer bg-light">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
-                    <button type="submit" class="btn btn-primary fw-bold"><i class="bi bi-check-lg me-1"></i> Conferma Iscrizione</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 
 <?php require_once (defined('PATH_INCLUDES') ? PATH_INCLUDES : __DIR__ . '/../includes') . '/footer.php'; ?>
