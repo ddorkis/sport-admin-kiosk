@@ -23,8 +23,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $certificatoScadenza = !empty($_POST['certificato_medico_scadenza']) ? trim($_POST['certificato_medico_scadenza']) : null;
     $stato = $_POST['stato'] ?? 'Attivo';
 
-    $returnPage = trim($_POST['return_page'] ?? '');
-    $redirectPage = ($returnPage === 'kiosk') ? 'kiosk' : 'tesserati';
+    $returnPage = trim($_POST['return_page'] ?? ($_POST['from'] ?? ''));
+    $redirectPage = ($returnPage === 'kiosk' || isKiosk()) ? 'kiosk' : 'tesserati';
 
     if ($personaId <= 0 || empty($numeroTessera)) {
         header("Location: index.php?page={$redirectPage}&err=" . urlencode('Selezionare una persona e inserire il numero di tessera.'));

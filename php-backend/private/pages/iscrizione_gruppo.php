@@ -27,13 +27,20 @@ $stmtG = $db->query("
     ORDER BY g.nome_gruppo ASC
 ");
 $gruppi = $stmtG->fetchAll();
+
+$fromKiosk = (!empty($_GET['from']) && $_GET['from'] === 'kiosk') || (!empty($user['is_kiosk']) && ($user['ruolo'] ?? '') !== 'admin');
+$backUrl = $fromKiosk ? 'index.php?page=kiosk' : 'index.php?page=gruppi';
+$backLabel = $fromKiosk ? 'Torna al Kiosk Reception' : 'Torna ai Gruppi';
 ?>
 
 <!-- Breadcrumb -->
 <nav aria-label="breadcrumb" class="mb-3">
     <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="index.php?page=gestionale" class="text-decoration-none">Dashboard</a></li>
-        <li class="breadcrumb-item"><a href="index.php?page=gruppi" class="text-decoration-none">Gruppi & Corsi</a></li>
+        <li class="breadcrumb-item">
+            <a href="<?= htmlspecialchars($backUrl) ?>" class="text-decoration-none">
+                <i class="<?= $fromKiosk ? 'bi bi-display' : 'bi bi-diagram-3' ?> me-1"></i> <?= htmlspecialchars($backLabel) ?>
+            </a>
+        </li>
         <li class="breadcrumb-item active" aria-current="page">Iscrizione Atleta</li>
     </ol>
 </nav>
@@ -50,8 +57,8 @@ $gruppi = $stmtG->fetchAll();
         </p>
     </div>
     <div>
-        <a href="index.php?page=gruppi" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-left me-1"></i> Annulla e Torna ai Gruppi
+        <a href="<?= htmlspecialchars($backUrl) ?>" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> <?= htmlspecialchars($backLabel) ?>
         </a>
     </div>
 </div>
@@ -59,6 +66,9 @@ $gruppi = $stmtG->fetchAll();
 <div class="row justify-content-center">
     <div class="col-lg-8 col-xl-7">
         <form method="POST" action="index.php?action=iscrivi_gruppo">
+            <?php if ($fromKiosk): ?>
+                <input type="hidden" name="from" value="kiosk">
+            <?php endif; ?>
             <div class="card border-0 shadow-sm rounded-4 bg-white mb-4">
                 <div class="card-header bg-white border-bottom py-3 px-4">
                     <h5 class="fw-bold mb-0 text-dark">

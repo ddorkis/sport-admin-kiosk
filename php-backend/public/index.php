@@ -66,10 +66,32 @@ if (!$user) {
     exit;
 }
 
-// 8. Controllo Flag KIOSK: se l'utente ha la modalità kiosk attiva e non ha forzato una pagina autorizzata
-if (!empty($user['is_kiosk']) && $page !== 'kiosk' && $page !== 'logout') {
-    header('Location: index.php?page=kiosk');
-    exit;
+// 8. Controllo Flag KIOSK: instradamento e permessi per postazione Reception
+$allowedKioskPages = [
+    'kiosk',
+    'persona_nuova',
+    'nuova_persona',
+    'tesseramento_nuovo',
+    'nuovo_tesseramento',
+    'iscrizione_gruppo',
+    'nuova_iscrizione_gruppo',
+    'pagamento_nuovo',
+    'nuovo_pagamento',
+    'persone',
+    'logout'
+];
+
+if (!empty($user['is_kiosk'])) {
+    // Se l'utente Kiosk accede alla home predefinita o a gestionale (senza ruolo admin), manda a kiosk
+    if (($page === 'home' || $page === 'gestionale') && ($user['ruolo'] ?? '') !== 'admin') {
+        header('Location: index.php?page=kiosk');
+        exit;
+    }
+    // Se è un profilo solo kiosk (non admin) e richiede pagine amministrative riservate (utenti, bilancio, ecc.), blocca e rimanda a kiosk
+    if (($user['ruolo'] ?? '') !== 'admin' && !in_array($page, $allowedKioskPages, true)) {
+        header('Location: index.php?page=kiosk&err=' . urlencode('Accesso riservato alla sola postazione reception Kiosk.'));
+        exit;
+    }
 }
 
 // 9. Routing sicuro con whitelist per impedire Local File Inclusion (LFI)

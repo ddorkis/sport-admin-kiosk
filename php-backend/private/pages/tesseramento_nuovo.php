@@ -22,13 +22,20 @@ $nextNum = $countTess + 1;
 $annoStr = !empty($annoAttivo['anno']) ? explode('/', $annoAttivo['anno'])[0] : date('Y');
 $numeroTesseraDefault = "TESS-{$annoStr}-" . str_pad($nextNum, 3, '0', STR_PAD_LEFT);
 $dataScadenzaMedicaDefault = date('Y-m-d', strtotime('+1 year'));
+
+$fromKiosk = (!empty($_GET['from']) && $_GET['from'] === 'kiosk') || (!empty($user['is_kiosk']) && ($user['ruolo'] ?? '') !== 'admin');
+$backUrl = $fromKiosk ? 'index.php?page=kiosk' : 'index.php?page=tesserati';
+$backLabel = $fromKiosk ? 'Torna al Kiosk Reception' : 'Torna ai Tesserati';
 ?>
 
 <!-- Breadcrumb -->
 <nav aria-label="breadcrumb" class="mb-3">
     <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="index.php?page=gestionale" class="text-decoration-none">Dashboard</a></li>
-        <li class="breadcrumb-item"><a href="index.php?page=tesserati" class="text-decoration-none">Tesserati</a></li>
+        <li class="breadcrumb-item">
+            <a href="<?= htmlspecialchars($backUrl) ?>" class="text-decoration-none">
+                <i class="<?= $fromKiosk ? 'bi bi-display' : 'bi bi-card-checklist' ?> me-1"></i> <?= htmlspecialchars($backLabel) ?>
+            </a>
+        </li>
         <li class="breadcrumb-item active" aria-current="page">Nuovo Tesseramento</li>
     </ol>
 </nav>
@@ -45,8 +52,8 @@ $dataScadenzaMedicaDefault = date('Y-m-d', strtotime('+1 year'));
         </p>
     </div>
     <div>
-        <a href="index.php?page=tesserati" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-left me-1"></i> Annulla e Torna all'Elenco
+        <a href="<?= htmlspecialchars($backUrl) ?>" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> <?= htmlspecialchars($backLabel) ?>
         </a>
     </div>
 </div>
@@ -54,6 +61,10 @@ $dataScadenzaMedicaDefault = date('Y-m-d', strtotime('+1 year'));
 <div class="row justify-content-center">
     <div class="col-lg-9 col-xl-8">
         <form method="POST" action="index.php?action=salva_tesseramento">
+            <?php if ($fromKiosk): ?>
+                <input type="hidden" name="from" value="kiosk">
+                <input type="hidden" name="return_page" value="kiosk">
+            <?php endif; ?>
             <div class="card border-0 shadow-sm rounded-4 bg-white mb-4">
                 <div class="card-header bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center">
                     <h5 class="fw-bold mb-0 text-dark">

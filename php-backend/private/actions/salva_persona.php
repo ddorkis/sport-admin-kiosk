@@ -81,13 +81,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $msg = 'creato';
         }
 
-        $returnPage = trim($_POST['return_page'] ?? '');
+        $returnPage = trim($_POST['return_page'] ?? ($_POST['from'] ?? ''));
         if ($actionType === 'save_and_tessera') {
-            header("Location: index.php?page=tesseramento_nuovo&persona_id=" . $targetId . "&msg=" . $msg);
-        } elseif ($returnPage === 'kiosk') {
-            header("Location: index.php?page=kiosk&msg=" . $msg);
+            header("Location: index.php?page=tesseramento_nuovo&persona_id=" . $targetId . ($returnPage === 'kiosk' || isKiosk() ? '&from=kiosk' : '') . "&msg=" . urlencode("Persona salvata con successo. Procedi ora con il tesseramento."));
+        } elseif ($returnPage === 'kiosk' || isKiosk()) {
+            header("Location: index.php?page=kiosk&msg=" . urlencode("Anagrafica '{$nome} {$cognome}' salvata con successo."));
         } else {
-            header("Location: index.php?page=persone&msg=" . $msg);
+            header("Location: index.php?page=persone&msg=" . urlencode("Anagrafica '{$nome} {$cognome}' salvata con successo."));
         }
         exit;
     } catch (Exception $e) {

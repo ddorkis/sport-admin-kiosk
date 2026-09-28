@@ -50,7 +50,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $db->commit();
-        header('Location: index.php?page=pagamenti&msg=success');
+        $returnPage = trim($_POST['from'] ?? ($_POST['return_to'] ?? ''));
+        if ($returnPage === 'kiosk' || isKiosk()) {
+            header('Location: index.php?page=kiosk&msg=' . urlencode("Pagamento registrato con successo. Ricevuta n. {$ricevutaNum} emessa per € " . number_format($importo, 2, ',', '.')));
+        } elseif ($returnPage === 'quote') {
+            header('Location: index.php?page=quote&msg=' . urlencode("Pagamento registrato con successo. Ricevuta n. {$ricevutaNum} emessa."));
+        } else {
+            header('Location: index.php?page=pagamenti&msg=' . urlencode("Pagamento registrato con successo. Ricevuta n. {$ricevutaNum} emessa."));
+        }
         exit;
     } catch (Exception $e) {
         $db->rollBack();

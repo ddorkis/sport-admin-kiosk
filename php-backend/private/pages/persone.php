@@ -73,9 +73,31 @@ $totAttivi = (int)$db->query("SELECT COUNT(*) FROM persone WHERE (attivo = 1 OR 
 $totArchiviati = (int)$db->query("SELECT COUNT(*) FROM persone WHERE attivo = 0")->fetchColumn();
 $totGdpr = (int)$db->query("SELECT COUNT(*) FROM persone WHERE anonimizzato_gdpr = 1")->fetchColumn();
 
+$fromKiosk = (!empty($_GET['from']) && $_GET['from'] === 'kiosk') || (!empty($user['is_kiosk']) && ($user['ruolo'] ?? '') !== 'admin');
+
 $msg = $_GET['msg'] ?? '';
 $err = $_GET['err'] ?? '';
 ?>
+
+<?php if ($fromKiosk): ?>
+    <div class="alert alert-warning border-warning d-flex justify-content-between align-items-center mb-4 shadow-sm py-2 px-3 rounded-3 flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-display fs-4 text-dark"></i>
+            <div>
+                <strong class="text-dark">Modalità Kiosk Reception Attiva</strong>
+                <div class="small text-dark-50">Consultazione anagrafica e saldo atleti per accoglienza desk.</div>
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="index.php?page=persona_nuova&from=kiosk" class="btn btn-primary fw-bold btn-sm shadow-sm">
+                <i class="bi bi-person-plus-fill me-1"></i> Nuova Persona
+            </a>
+            <a href="index.php?page=kiosk" class="btn btn-dark fw-bold btn-sm shadow-sm">
+                <i class="bi bi-arrow-left me-1"></i> Torna al Kiosk
+            </a>
+        </div>
+    </div>
+<?php endif; ?>
 
 <?php if ($msg): ?>
     <div class="alert alert-success alert-dismissible fade show shadow-sm rounded-3 mb-4" role="alert">
@@ -98,7 +120,7 @@ $err = $_GET['err'] ?? '';
         <h2 class="h3 fw-bold mb-1"><i class="bi bi-people-fill me-2 text-primary"></i>Anagrafica Generale Persone</h2>
         <p class="text-muted small mb-0">Gestione soci, atleti minorenni con tutori e conformità GDPR / Diritto all'Oblio</p>
     </div>
-    <a href="index.php?page=persona_nuova" class="btn btn-primary fw-bold shadow-sm">
+    <a href="index.php?page=persona_nuova<?= $fromKiosk ? '&from=kiosk' : '' ?>" class="btn btn-primary fw-bold shadow-sm">
         <i class="bi bi-person-plus-fill me-1"></i> Nuova Persona
     </a>
 </div>
@@ -108,6 +130,9 @@ $err = $_GET['err'] ?? '';
     <div class="card-body p-3">
         <form method="GET" class="row g-2 align-items-center">
             <input type="hidden" name="page" value="persone">
+            <?php if ($fromKiosk): ?>
+                <input type="hidden" name="from" value="kiosk">
+            <?php endif; ?>
             <div class="col-md-4">
                 <div class="input-group">
                     <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>

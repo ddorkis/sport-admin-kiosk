@@ -65,7 +65,7 @@ if ($selectedQuota) {
 <nav aria-label="breadcrumb" class="mb-3">
     <ol class="breadcrumb">
         <li class="breadcrumb-item"><a href="index.php?page=gestionale" class="text-decoration-none">Dashboard</a></li>
-        <li class="breadcrumb-item"><a href="index.php?page=<?= $returnTo ?>" class="text-decoration-none"><?= $returnTo === 'quote' ? 'Quote Mensili' : 'Pagamenti' ?></a></li>
+        <li class="breadcrumb-item"><a href="index.php?page=<?= htmlspecialchars($returnTo) ?>" class="text-decoration-none"><?= $returnTo === 'quote' ? 'Quote Mensili' : ($returnTo === 'kiosk' ? 'Kiosk Reception' : 'Pagamenti') ?></a></li>
         <li class="breadcrumb-item active" aria-current="page">Registra Incasso</li>
     </ol>
 </nav>
@@ -82,8 +82,8 @@ if ($selectedQuota) {
         </p>
     </div>
     <div>
-        <a href="index.php?page=<?= $returnTo ?>" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-left me-1"></i> Annulla e Torna Indietro
+        <a href="index.php?page=<?= htmlspecialchars($returnTo) ?>" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> <?= $returnTo === 'kiosk' ? 'Torna al Kiosk Reception' : 'Annulla e Torna Indietro' ?>
         </a>
     </div>
 </div>
@@ -91,6 +91,8 @@ if ($selectedQuota) {
 <div class="row justify-content-center">
     <div class="col-lg-9 col-xl-8">
         <form method="POST" action="index.php?action=registra_pagamento">
+            <input type="hidden" name="from" value="<?= htmlspecialchars($returnTo) ?>">
+            <input type="hidden" name="return_to" value="<?= htmlspecialchars($returnTo) ?>">
             <div class="card border-0 shadow-sm rounded-4 bg-white mb-4">
                 <div class="card-header bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center">
                     <h5 class="fw-bold mb-0 text-dark">

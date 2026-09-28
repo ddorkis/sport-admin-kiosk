@@ -47,10 +47,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $quoteMsg = " Generate in automatico {$num} rate mensili per l'atleta.";
         }
 
-        header('Location: index.php?page=gruppi&msg=' . urlencode("Atleta iscritto al corso con successo.{$quoteMsg}"));
+        $returnPage = (!empty($_POST['from']) && $_POST['from'] === 'kiosk') || isKiosk() ? 'kiosk' : 'gruppi';
+        header("Location: index.php?page={$returnPage}&msg=" . urlencode("Atleta iscritto al corso con successo.{$quoteMsg}"));
         exit;
     } catch (Exception $e) {
-        header('Location: index.php?page=gruppi&err=' . urlencode('Errore iscrizione: ' . $e->getMessage()));
+        $returnPage = (!empty($_POST['from']) && $_POST['from'] === 'kiosk') || isKiosk() ? 'kiosk' : 'gruppi';
+        header("Location: index.php?page={$returnPage}&err=" . urlencode('Errore iscrizione: ' . $e->getMessage()));
         exit;
     }
 }

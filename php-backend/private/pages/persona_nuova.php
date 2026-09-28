@@ -29,6 +29,10 @@ if (!empty($persona['data_nascita'])) {
     $etaIniziale = $diff->y;
     $isMinorenneIniziale = ($etaIniziale < 18);
 }
+
+$fromKiosk = (!empty($_GET['from']) && $_GET['from'] === 'kiosk') || (!empty($user['is_kiosk']) && ($user['ruolo'] ?? '') !== 'admin');
+$backUrl = $fromKiosk ? 'index.php?page=kiosk' : 'index.php?page=persone';
+$backLabel = $fromKiosk ? 'Torna al Kiosk Reception' : 'Torna all\'Elenco Persone';
 ?>
 
 <div class="container-fluid py-2" style="max-width: 1200px;">
@@ -38,8 +42,8 @@ if (!empty($persona['data_nascita'])) {
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb mb-1 text-muted small">
                     <li class="breadcrumb-item">
-                        <a href="index.php?page=persone" class="text-decoration-none text-muted">
-                            <i class="bi bi-people me-1"></i> Anagrafica Persone
+                        <a href="<?= htmlspecialchars($backUrl) ?>" class="text-decoration-none text-muted">
+                            <i class="<?= $fromKiosk ? 'bi bi-display' : 'bi bi-people' ?> me-1"></i> <?= htmlspecialchars($backLabel) ?>
                         </a>
                     </li>
                     <li class="breadcrumb-item active text-primary fw-semibold" aria-current="page">
@@ -48,7 +52,7 @@ if (!empty($persona['data_nascita'])) {
                 </ol>
             </nav>
             <div class="d-flex align-items-center">
-                <a href="index.php?page=persone" class="btn btn-outline-secondary btn-sm me-3 rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 38px; height: 38px;" title="Torna all'elenco persone">
+                <a href="<?= htmlspecialchars($backUrl) ?>" class="btn btn-outline-secondary btn-sm me-3 rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 38px; height: 38px;" title="<?= htmlspecialchars($backLabel) ?>">
                     <i class="bi bi-arrow-left fs-5"></i>
                 </a>
                 <div>
@@ -65,11 +69,11 @@ if (!empty($persona['data_nascita'])) {
         </div>
 
         <div class="d-flex align-items-center gap-2">
-            <a href="index.php?page=persone" class="btn btn-outline-secondary px-3">
+            <a href="<?= htmlspecialchars($backUrl) ?>" class="btn btn-outline-secondary px-3">
                 <i class="bi bi-x-lg me-1"></i> Annulla
             </a>
             <button type="button" class="btn btn-primary fw-bold px-4 shadow-sm" onclick="document.getElementById('formPersona').submit();">
-                <i class="bi bi-check-lg me-1"></i> <?= $isEditing ? 'Salva Modifiche' : 'Salva e Torna alla Lista' ?>
+                <i class="bi bi-check-lg me-1"></i> <?= $isEditing ? 'Salva Modifiche' : 'Salva Anagrafica' ?>
             </button>
         </div>
     </div>
@@ -78,6 +82,10 @@ if (!empty($persona['data_nascita'])) {
     <form id="formPersona" method="POST" action="index.php?action=salva_persona">
         <?php if ($isEditing): ?>
             <input type="hidden" name="id" value="<?= $persona['id'] ?>">
+        <?php endif; ?>
+        <?php if ($fromKiosk): ?>
+            <input type="hidden" name="from" value="kiosk">
+            <input type="hidden" name="return_page" value="kiosk">
         <?php endif; ?>
         <input type="hidden" name="is_minorenne" id="isMinorenneInput" value="<?= $isMinorenneIniziale ? '1' : '0' ?>">
 
