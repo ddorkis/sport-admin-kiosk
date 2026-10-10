@@ -795,9 +795,10 @@ export default function App() {
             onLogout={handleLogout}
           />
 
-          {/* Contenuto Gestionale in base alla tab attiva */}
-          <main className="flex-grow-1 overflow-auto" style={{ minWidth: 0 }}>
-            {activeTab === 'dashboard' && (
+          {/* Colonna Destra (Contenuto Gestionale + Footer a destra della Sidebar) */}
+          <div className="flex-grow-1 d-flex flex-column" style={{ minWidth: 0, minHeight: '100vh' }}>
+            <main className="flex-grow-1 overflow-auto" style={{ minWidth: 0 }}>
+              {activeTab === 'dashboard' && (
               <DashboardView
                 annoAttivo={annoAttivo}
                 persone={data.persone}
@@ -1126,7 +1127,13 @@ export default function App() {
                 onOpenStampaDemo={handlePrintDemoFromAssociazione}
               />
             )}
-          </main>
+            </main>
+            <footer className="text-center py-4 text-muted small mt-auto border-top bg-white">
+              <div className="container-fluid px-4">
+                Gestionale Polisportiva &bull; Backend PHP + MariaDB &bull; Frontend Bootstrap 5
+              </div>
+            </footer>
+          </div>
         </div>
       )}
 

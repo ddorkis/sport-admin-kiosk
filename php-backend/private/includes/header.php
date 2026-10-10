@@ -77,10 +77,9 @@ $annoIdAttivo = (int)($annoAttivo['id'] ?? 1);
     <a href="index.php?page=kiosk" class="btn btn-warning btn-sm text-dark fw-bold" title="Kiosk"><i class="bi bi-tablet-landscape"></i></a>
 </div>
 
-<div class="container-fluid">
-    <div class="row">
-        <!-- Sidebar per Desktop (>= md: sempre aperta a sinistra) -->
-        <nav class="col-md-3 col-lg-2 d-none d-md-flex flex-column sidebar p-3 sticky-top" style="height: 100vh; overflow-y: auto;">
+<div class="d-flex flex-column flex-md-row min-vh-100 w-100">
+    <!-- Sidebar per Desktop (>= md: sempre aperta a sinistra a tutta altezza del portale) -->
+    <nav class="col-md-3 col-lg-2 d-none d-md-flex flex-column sidebar p-3 sticky-top flex-shrink-0" style="height: 100vh; overflow-y: auto;">
             <div class="mb-3 pb-3 border-bottom border-primary-subtle">
                 <div class="d-flex align-items-center gap-2 mb-2">
                     <i class="bi bi-trophy-fill text-warning fs-3"></i>
@@ -226,8 +225,9 @@ $annoIdAttivo = (int)($annoAttivo['id'] ?? 1);
             </div>
         </div>
 
-        <!-- Contenuto Principale Pagina -->
-        <main class="col-md-9 col-lg-10 ms-sm-auto px-md-4 py-4">
+        <!-- Colonna Destra (Contenuto Principale + Footer a destra della Sidebar) -->
+        <div class="col-md-9 col-lg-10 ms-sm-auto d-flex flex-column flex-grow-1 p-0" style="min-width: 0; min-height: 100vh;">
+            <main class="flex-grow-1 px-md-4 py-4">
             <?php if (!empty($_GET['msg'])): ?>
                 <div class="alert alert-success alert-dismissible fade show shadow-sm d-flex align-items-center mb-4" role="alert">
                     <i class="bi bi-check-circle-fill me-2 fs-5"></i>
