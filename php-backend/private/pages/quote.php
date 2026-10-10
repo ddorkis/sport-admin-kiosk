@@ -12,6 +12,38 @@ $meseFiltro = trim($_GET['mese'] ?? '');
 $statoFiltro = trim($_GET['stato'] ?? '');
 $gruppoFiltro = !empty($_GET['gruppo_id']) ? (int)$_GET['gruppo_id'] : 0;
 
+// Recupera tutti gli anni sportivi e individua l'anno di lavoro
+$tuttiAnni = [];
+try {
+    $tuttiAnni = $db->query("SELECT id, anno, attivo, data_inizio, data_fine FROM anno ORDER BY data_inizio DESC")->fetchAll() ?: [];
+} catch (Exception $e) {}
+
+$annoId = !empty($_GET['anno_id']) ? (int)$_GET['anno_id'] : 0;
+$annoSelezionato = null;
+if ($annoId > 0) {
+    foreach ($tuttiAnni as $a) {
+        if ((int)$a['id'] === $annoId) {
+            $annoSelezionato = $a;
+            break;
+        }
+    }
+}
+if (!$annoSelezionato) {
+    foreach ($tuttiAnni as $a) {
+        if (!empty($a['attivo'])) {
+            $annoSelezionato = $a;
+            break;
+        }
+    }
+}
+if (!$annoSelezionato && !empty($tuttiAnni)) {
+    $annoSelezionato = $tuttiAnni[0];
+}
+if (!$annoSelezionato) {
+    $annoSelezionato = ['id' => 1, 'anno' => '2024/2025', 'data_inizio' => '2024-09-01', 'data_fine' => '2025-06-30'];
+}
+$annoId = (int)$annoSelezionato['id'];
+
 // Utility nomi mesi italiani
 function formattaMeseItaliano($m) {
     if (!$m) return '';
@@ -27,62 +59,89 @@ function formattaMeseItaliano($m) {
     return "{$nome} {$parts[0]}";
 }
 
-// 1. Statistiche Complessive Stagione
-$statsTotali = $db->query("
+// 1. Statistiche Complessive per la Stagione Selezionata
+$stmtStatsTotali = $db->prepare("
     SELECT 
         COUNT(*) AS totale_quote,
-        COALESCE(SUM(importo), 0) AS valore_totale,
-        COALESCE(SUM(importo_pagato), 0) AS totale_incassato,
-        COALESCE(SUM(importo - importo_pagato), 0) AS totale_residuo
-    FROM quote
-    WHERE stato != 'annullata'
-")->fetch();
+        COALESCE(SUM(q.importo), 0) AS valore_totale,
+        COALESCE(SUM(q.importo_pagato), 0) AS totale_incassato,
+        COALESCE(SUM(q.importo - q.importo_pagato), 0) AS totale_residuo
+    FROM quote q
+    INNER JOIN tesserati t ON q.tesserato_id = t.id
+    WHERE t.anno_id = ? AND q.stato != 'annullata'
+");
+$stmtStatsTotali->execute([$annoId]);
+$statsTotali = $stmtStatsTotali->fetch() ?: ['totale_quote' => 0, 'valore_totale' => 0, 'totale_incassato' => 0, 'totale_residuo' => 0];
 
 $valoreTotale = (float)$statsTotali['valore_totale'];
 $totaleIncassato = (float)$statsTotali['totale_incassato'];
 $totaleResiduo = (float)$statsTotali['totale_residuo'];
 $percIncasso = $valoreTotale > 0 ? round(($totaleIncassato / $valoreTotale) * 100) : 0;
 
-// Quote scadute
-$statsScadute = $db->query("
+// Quote scadute per la stagione selezionata
+$stmtStatsScadute = $db->prepare("
     SELECT 
         COUNT(*) AS count_scadute,
-        COALESCE(SUM(importo - importo_pagato), 0) AS importo_scaduto
-    FROM quote
-    WHERE stato != 'pagata' AND stato != 'annullata' AND data_scadenza < CURDATE()
-")->fetch();
+        COALESCE(SUM(q.importo - q.importo_pagato), 0) AS importo_scaduto
+    FROM quote q
+    INNER JOIN tesserati t ON q.tesserato_id = t.id
+    WHERE t.anno_id = ? AND q.stato != 'pagata' AND q.stato != 'annullata' AND q.data_scadenza < CURDATE()
+");
+$stmtStatsScadute->execute([$annoId]);
+$statsScadute = $stmtStatsScadute->fetch() ?: ['count_scadute' => 0, 'importo_scaduto' => 0];
 $quoteScaduteCount = (int)$statsScadute['count_scadute'];
 $totaleScaduto = (float)$statsScadute['importo_scaduto'];
 
-// 2. Mesi disponibili & Raggruppamento per Mese
-$mesiDisponibili = $db->query("
-    SELECT DISTINCT mese_riferimento 
-    FROM quote 
-    WHERE mese_riferimento IS NOT NULL 
-    ORDER BY mese_riferimento ASC
-")->fetchAll(PDO::FETCH_COLUMN);
-
-// Se non ci sono ancora quote con mese_riferimento, proponi mesi stagione standard
-if (empty($mesiDisponibili)) {
-    $mesiDisponibili = ['2024-09', '2024-10', '2024-11', '2024-12', '2025-01', '2025-02', '2025-03', '2025-04', '2025-05', '2025-06'];
+// 2. Calcolo dinamico dei mesi della stagione sportiva (da data_inizio a data_fine dell'anno)
+$mesiStagione = [];
+if (!empty($annoSelezionato['data_inizio']) && !empty($annoSelezionato['data_fine'])) {
+    try {
+        $cur = new DateTime($annoSelezionato['data_inizio']);
+        $end = new DateTime($annoSelezionato['data_fine']);
+        $end->modify('first day of next month');
+        $safety = 0;
+        while ($cur < $end && $safety < 36) {
+            $mesiStagione[] = $cur->format('Y-m');
+            $cur->modify('+1 month');
+            $safety++;
+        }
+    } catch (Exception $e) {}
 }
+if (empty($mesiStagione)) {
+    $mesiStagione = ['2024-09', '2024-10', '2024-11', '2024-12', '2025-01', '2025-02', '2025-03', '2025-04', '2025-05', '2025-06'];
+}
+
+// Eventuali mesi presenti nelle quote di questo anno
+$stmtMQ = $db->prepare("
+    SELECT DISTINCT q.mese_riferimento 
+    FROM quote q
+    INNER JOIN tesserati t ON q.tesserato_id = t.id
+    WHERE t.anno_id = ? AND q.mese_riferimento IS NOT NULL 
+    ORDER BY q.mese_riferimento ASC
+");
+$stmtMQ->execute([$annoId]);
+$mesiDalleQuote = $stmtMQ->fetchAll(PDO::FETCH_COLUMN) ?: [];
+
+$mesiDisponibili = array_values(array_unique(array_merge($mesiStagione, $mesiDalleQuote)));
+sort($mesiDisponibili);
 
 $riepilogoMesi = [];
 foreach ($mesiDisponibili as $m) {
     $stmtM = $db->prepare("
         SELECT 
             COUNT(*) AS count_quote,
-            COALESCE(SUM(importo), 0) AS previsto,
-            COALESCE(SUM(importo_pagato), 0) AS incassato,
-            COALESCE(SUM(importo - importo_pagato), 0) AS residuo,
-            COALESCE(SUM(CASE WHEN stato != 'pagata' AND stato != 'annullata' AND data_scadenza < CURDATE() THEN (importo - importo_pagato) ELSE 0 END), 0) AS scaduto,
-            SUM(CASE WHEN stato = 'pagata' THEN 1 ELSE 0 END) AS pagate,
-            SUM(CASE WHEN stato = 'parziale' THEN 1 ELSE 0 END) AS parziali,
-            SUM(CASE WHEN stato = 'da_pagare' THEN 1 ELSE 0 END) AS da_pagare
-        FROM quote
-        WHERE mese_riferimento = ? AND stato != 'annullata'
+            COALESCE(SUM(q.importo), 0) AS previsto,
+            COALESCE(SUM(q.importo_pagato), 0) AS incassato,
+            COALESCE(SUM(q.importo - q.importo_pagato), 0) AS residuo,
+            COALESCE(SUM(CASE WHEN q.stato != 'pagata' AND q.stato != 'annullata' AND q.data_scadenza < CURDATE() THEN (q.importo - q.importo_pagato) ELSE 0 END), 0) AS scaduto,
+            SUM(CASE WHEN q.stato = 'pagata' THEN 1 ELSE 0 END) AS pagate,
+            SUM(CASE WHEN q.stato = 'parziale' THEN 1 ELSE 0 END) AS parziali,
+            SUM(CASE WHEN q.stato = 'da_pagare' THEN 1 ELSE 0 END) AS da_pagare
+        FROM quote q
+        INNER JOIN tesserati t ON q.tesserato_id = t.id
+        WHERE t.anno_id = ? AND q.mese_riferimento = ? AND q.stato != 'annullata'
     ");
-    $stmtM->execute([$m]);
+    $stmtM->execute([$annoId, $m]);
     $rowM = $stmtM->fetch();
     $previstoM = (float)$rowM['previsto'];
     $incassatoM = (float)$rowM['incassato'];
@@ -103,16 +162,16 @@ foreach ($mesiDisponibili as $m) {
     ];
 }
 
-// 3. Query per Tabella Singole Quote
+// 3. Query per Tabella Singole Quote filtrate per l'anno sportivo
 $sqlTabella = "
     SELECT q.*, p.nome, p.cognome, p.is_minorenne, t.numero_tessera, g.nome_gruppo
     FROM quote q
     INNER JOIN tesserati t ON q.tesserato_id = t.id
     INNER JOIN persone p ON t.persona_id = p.id
     LEFT JOIN gruppi g ON q.gruppo_id = g.id
-    WHERE 1=1
+    WHERE t.anno_id = ?
 ";
-$paramsTabella = [];
+$paramsTabella = [$annoId];
 
 if ($search !== '') {
     $sqlTabella .= " AND (p.nome LIKE ? OR p.cognome LIKE ? OR t.numero_tessera LIKE ? OR q.causale LIKE ?)";
@@ -139,10 +198,15 @@ if ($statoFiltro === 'scadute') {
 $sqlTabella .= " ORDER BY q.data_scadenza DESC, q.id DESC";
 $stmtTabella = $db->prepare($sqlTabella);
 $stmtTabella->execute($paramsTabella);
-$quoteElenco = $stmtTabella->fetchAll();
+$quoteElenco = $stmtTabella->fetchAll() ?: [];
 
-// Gruppi per dropdown filtro
-$elencoGruppi = $db->query("SELECT id, nome_gruppo FROM gruppi ORDER BY nome_gruppo ASC")->fetchAll();
+// Gruppi per dropdown filtro (dell'anno o tutti)
+$stmtGruppi = $db->prepare("SELECT id, nome_gruppo FROM gruppi WHERE anno_id = ? ORDER BY nome_gruppo ASC");
+$stmtGruppi->execute([$annoId]);
+$elencoGruppi = $stmtGruppi->fetchAll() ?: [];
+if (empty($elencoGruppi)) {
+    $elencoGruppi = $db->query("SELECT id, nome_gruppo FROM gruppi ORDER BY nome_gruppo ASC")->fetchAll() ?: [];
+}
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
@@ -152,15 +216,52 @@ $elencoGruppi = $db->query("SELECT id, nome_gruppo FROM gruppi ORDER BY nome_gru
         </h2>
         <p class="text-muted small mb-0">Controllo pagamenti, quote emesse e stati di riscossione per la stagione sportiva</p>
     </div>
-    <div class="d-flex gap-2">
-        <a href="index.php?action=genera_quote&redirect=quote" class="btn btn-outline-primary shadow-sm" onclick="return confirm('Generare/sincronizzare tutte le quote per i gruppi attivi?');">
+    <div class="d-flex gap-2 flex-wrap align-items-center">
+        <!-- Selettore Anno Sportivo -->
+        <?php if (!empty($tuttiAnni)): ?>
+            <form method="GET" class="d-inline-flex align-items-center gap-1 bg-white px-2 py-1 rounded-3 border shadow-sm">
+                <input type="hidden" name="page" value="quote">
+                <input type="hidden" name="vista" value="<?= htmlspecialchars($vista) ?>">
+                <i class="bi bi-calendar-event text-primary"></i>
+                <label for="select-anno-php" class="small fw-bold text-dark mb-0 me-1">Stagione:</label>
+                <select id="select-anno-php" name="anno_id" class="form-select form-select-sm border-0 fw-bold bg-transparent" onchange="this.form.submit()">
+                    <?php foreach ($tuttiAnni as $a): ?>
+                        <option value="<?= $a['id'] ?>" <?= (int)$a['id'] === $annoId ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($a['anno']) ?> <?= !empty($a['attivo']) ? '⭐ Attiva' : '' ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </form>
+        <?php endif; ?>
+
+        <a href="index.php?action=genera_quote&redirect=quote&anno_id=<?= $annoId ?>" class="btn btn-outline-primary shadow-sm" onclick="return confirm('Generare/sincronizzare tutte le quote per i gruppi attivi?');">
             <i class="bi bi-lightning-charge me-1"></i> Genera / Sincronizza Quote
         </a>
-        <a href="index.php?page=quote&vista=tabella&stato=scadute" class="btn btn-outline-danger shadow-sm fw-bold">
+        <a href="index.php?page=quote&vista=tabella&stato=scadute&anno_id=<?= $annoId ?>" class="btn btn-outline-danger shadow-sm fw-bold">
             <i class="bi bi-exclamation-triangle me-1"></i> Quote Scadute (<?= $quoteScaduteCount ?>)
         </a>
     </div>
 </div>
+
+<!-- Banner Stagione Attiva se 0 quote -->
+<?php if ($valoreTotale == 0): ?>
+    <div class="alert alert-info border-info-subtle bg-info-subtle d-flex justify-content-between align-items-center p-3 rounded-4 mb-4">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-calendar-check-fill fs-2 text-primary me-3"></i>
+            <div>
+                <h6 class="alert-heading fw-bold mb-1">
+                    Stagione Sportiva <?= htmlspecialchars($annoSelezionato['anno']) ?> (dal <?= date('d/m/Y', strtotime($annoSelezionato['data_inizio'])) ?> al <?= date('d/m/Y', strtotime($annoSelezionato['data_fine'])) ?>)
+                </h6>
+                <p class="mb-0 small text-secondary">
+                    Non ci sono ancora quote registrate per questo anno sportivo. Lo scadenziario mostra correttamente le <strong><?= count($mesiDisponibili) ?> mensilità a € 0,00</strong> in attesa dell'iscrizione dei corsisti ai gruppi.
+                </p>
+            </div>
+        </div>
+        <a href="index.php?page=iscrizione_gruppo" class="btn btn-sm btn-primary fw-bold text-nowrap ms-3">
+            <i class="bi bi-person-plus me-1"></i> Iscrivi Corsisti
+        </a>
+    </div>
+<?php endif; ?>
 
 <!-- 4 KPI CARDS -->
 <div class="row g-3 mb-4">

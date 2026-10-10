@@ -437,3 +437,87 @@ export function sincronizzaQuoteAnnualiPerTutti(
   return { quoteAggiornate: quote, numeroNuoveQuote: totGenerate };
 }
 
+/**
+ * Genera l'elenco dei mesi compresi tra data_inizio e data_fine dell'anno sportivo
+ * Es. dal 2026-09-01 al 2027-08-31 produce:
+ * ['2026-09', '2026-10', '2026-11', '2026-12', '2027-01', '2027-02', '2027-03', '2027-04', '2027-05', '2027-06', '2027-07', '2027-08']
+ */
+export function getMesiAnnoSportivo(anno?: Anno): string[] {
+  if (!anno || !anno.data_inizio || !anno.data_fine) {
+    return [
+      '2024-09', '2024-10', '2024-11', '2024-12',
+      '2025-01', '2025-02', '2025-03', '2025-04', '2025-05', '2025-06'
+    ];
+  }
+
+  const [startYear, startMonth] = anno.data_inizio.substring(0, 7).split('-').map(Number);
+  const [endYear, endMonth] = anno.data_fine.substring(0, 7).split('-').map(Number);
+
+  if (isNaN(startYear) || isNaN(startMonth) || isNaN(endYear) || isNaN(endMonth)) {
+    return [];
+  }
+
+  const mesi: string[] = [];
+  let curY = startYear;
+  let curM = startMonth;
+
+  let safety = 0;
+  while ((curY < endYear || (curY === endYear && curM <= endMonth)) && safety < 36) {
+    const mmStr = curM < 10 ? `0${curM}` : `${curM}`;
+    mesi.push(`${curY}-${mmStr}`);
+
+    curM++;
+    if (curM > 12) {
+      curM = 1;
+      curY++;
+    }
+    safety++;
+  }
+
+  return mesi;
+}
+
+/**
+ * Verifica se una quota appartiene a un determinato anno sportivo
+ */
+export function isQuotaInAnnoSportivo(
+  quota: Quota,
+  anno?: Anno,
+  tesserati: Tesserato[] = [],
+  gruppi: Gruppo[] = []
+): boolean {
+  if (!anno) return true;
+
+  // 1. Controlla se il tesserato associato appartiene all'anno
+  const tess = tesserati.find((t) => t.id === quota.tesserato_id);
+  if (tess && tess.anno_id === anno.id) {
+    return true;
+  }
+
+  // 2. Controlla se il gruppo appartiene all'anno
+  if (quota.gruppo_id) {
+    const grp = gruppi.find((g) => g.id === quota.gruppo_id);
+    if (grp && grp.anno_id === anno.id) {
+      return true;
+    }
+  }
+
+  // 3. Se non trova tess/grp corrispondente, verifica per intervallo di date
+  if (quota.data_scadenza && anno.data_inizio && anno.data_fine) {
+    if (quota.data_scadenza >= anno.data_inizio && quota.data_scadenza <= anno.data_fine) {
+      return true;
+    }
+  }
+
+  // 4. Verifica per mese_riferimento
+  if (quota.mese_riferimento && anno.data_inizio && anno.data_fine) {
+    const startMese = anno.data_inizio.substring(0, 7);
+    const endMese = anno.data_fine.substring(0, 7);
+    if (quota.mese_riferimento >= startMese && quota.mese_riferimento <= endMese) {
+      return true;
+    }
+  }
+
+  return false;
+}
+

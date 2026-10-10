@@ -991,6 +991,9 @@ export default function App() {
                 tesserati={data.tesserati}
                 persone={data.persone}
                 gruppi={data.gruppi}
+                annoAttivo={annoAttivo}
+                anni={data.anni}
+                onSelectAnno={handleSelectAnno}
                 initialFilter={quoteFilter}
                 onOpenPagamento={(tessId, quotaId) => {
                   setPreselectedTesseratoForPagamento(tessId);
@@ -1004,6 +1007,10 @@ export default function App() {
                   setActiveTab('previsioni');
                 }}
                 onSincronizzaQuote={handleSincronizzaQuote}
+                onOpenIscrizioneGruppo={() => {
+                  setPreselectedTesseratoForGruppo(undefined);
+                  setActiveTab('iscrizione_gruppo');
+                }}
               />
             )}
 

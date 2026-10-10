@@ -1,6 +1,6 @@
 import React from 'react';
 import { Persona, Tesserato, Gruppo, Quota, Pagamento, Anno } from '../../types';
-import { isQuotaScaduta, getGiorniRitardo } from '../../utils/storage';
+import { isQuotaScaduta, getGiorniRitardo, isQuotaInAnnoSportivo, getMesiAnnoSportivo } from '../../utils/storage';
 
 interface Props {
   annoAttivo?: Anno;
@@ -25,22 +25,24 @@ export const DashboardView: React.FC<Props> = ({
   onOpenPagamento,
   onOpenNuovaPersona
 }) => {
-  const quoteScadute = quote.filter(isQuotaScaduta);
+  // Filtra entità dell'anno sportivo attivo
+  const quoteAnno = quote.filter((q) => isQuotaInAnnoSportivo(q, annoAttivo, tesserati, gruppi));
+  const tesseratiAnno = tesserati.filter((t) => !annoAttivo || t.anno_id === annoAttivo.id);
+
+  const quoteScadute = quoteAnno.filter(isQuotaScaduta);
   const totaleIncassato = pagamenti.reduce((acc, p) => acc + p.importo, 0);
-  const totaleQuoteDaIncassare = quote
+  const totaleQuoteDaIncassare = quoteAnno
     .filter((q) => q.stato !== 'pagata' && q.stato !== 'annullata')
     .reduce((acc, q) => acc + (q.importo - (q.importo_pagato || 0)), 0);
 
   const minorenniCount = persone.filter((p) => p.is_minorenne).length;
 
-  // Calcolo Previsione Mese Corrente
-  const allMonths = Array.from(
-    new Set(quote.map((q) => q.mese_riferimento || q.data_scadenza.substring(0, 7)).filter(Boolean))
-  ).sort();
-  const currentMonthStr = '2024-10'; // default periodo attivo o mese corrente
-  const activeMonth = allMonths.includes(currentMonthStr) ? currentMonthStr : (allMonths[0] || '2024-09');
+  // Calcolo Mese Attivo della stagione sportiva
+  const mesiAnno = getMesiAnnoSportivo(annoAttivo);
+  const nowMonth = new Date().toISOString().substring(0, 7);
+  const activeMonth = mesiAnno.includes(nowMonth) ? nowMonth : (mesiAnno[0] || '2024-09');
 
-  const quoteMeseAttivo = quote.filter(
+  const quoteMeseAttivo = quoteAnno.filter(
     (q) => (q.mese_riferimento || q.data_scadenza.substring(0, 7)) === activeMonth && q.stato !== 'annullata'
   );
   const totalePrevistoMese = quoteMeseAttivo.reduce((sum, q) => sum + q.importo, 0);
@@ -133,9 +135,9 @@ export const DashboardView: React.FC<Props> = ({
             <div className="d-flex justify-content-between align-items-start">
               <div>
                 <span className="text-muted small fw-semibold text-uppercase">Tesserati {annoAttivo?.anno}</span>
-                <h3 className="fw-bold my-1 text-success">{tesserati.length}</h3>
+                <h3 className="fw-bold my-1 text-success">{tesseratiAnno.length}</h3>
                 <span className="badge bg-success-subtle text-success">
-                  {gruppi.length} Gruppi Sportivi Attivi
+                  {gruppi.filter((g) => !annoAttivo || g.anno_id === annoAttivo.id).length} Gruppi Sportivi Attivi
                 </span>
               </div>
               <div className="p-3 bg-success-subtle text-success rounded-3">

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Quota, Gruppo, Anno, Associazione, SpesaPrevisionale, CategoriaSpesa } from '../../types';
-import { isQuotaScaduta } from '../../utils/storage';
+import { isQuotaScaduta, getMesiAnnoSportivo, isQuotaInAnnoSportivo } from '../../utils/storage';
 import { StampaProspettoCdModal } from '../modals/StampaProspettoCdModal';
 
 interface Props {
@@ -78,15 +78,15 @@ export const PrevisioneSpeseView: React.FC<Props> = ({
   const [variazioneQuotePercentuale, setVariazioneQuotePercentuale] = useState(0); // es. +10% o -10%
   const [variazioneSpesePercentuale, setVariazioneSpesePercentuale] = useState(0);
 
+  // Filtra quote dell'anno sportivo attivo
+  const quoteStagione = quote.filter((q) => isQuotaInAnnoSportivo(q, annoAttivo, [], gruppi));
+
   // 1. Individua i mesi della stagione sportiva attiva
-  const mesiStagioneDefault = [
-    '2024-09', '2024-10', '2024-11', '2024-12',
-    '2025-01', '2025-02', '2025-03', '2025-04', '2025-05', '2025-06'
-  ];
+  const mesiStagioneDefault = getMesiAnnoSportivo(annoAttivo);
 
   const mesiDalleQuote = Array.from(
     new Set(
-      quote
+      quoteStagione
         .map((q) => q.mese_riferimento || q.data_scadenza.substring(0, 7))
         .filter(Boolean)
     )
@@ -110,7 +110,7 @@ export const PrevisioneSpeseView: React.FC<Props> = ({
 
   const pianoMesi = tuttiMesi.map((m) => {
     // Quote del mese
-    const quoteMese = quote.filter(
+    const quoteMese = quoteStagione.filter(
       (q) => (q.mese_riferimento || q.data_scadenza.substring(0, 7)) === m && q.stato !== 'annullata'
     );
     const entrateBase = quoteMese.reduce((sum, q) => sum + q.importo, 0);

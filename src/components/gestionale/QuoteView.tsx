@@ -1,17 +1,21 @@
-import React, { useState } from 'react';
-import { Quota, Tesserato, Persona, Gruppo } from '../../types';
-import { isQuotaScaduta, getGiorniRitardo } from '../../utils/storage';
+import React, { useState, useEffect } from 'react';
+import { Quota, Tesserato, Persona, Gruppo, Anno } from '../../types';
+import { isQuotaScaduta, getGiorniRitardo, getMesiAnnoSportivo, isQuotaInAnnoSportivo } from '../../utils/storage';
 
 interface Props {
   quote: Quota[];
   tesserati: Tesserato[];
   persone: Persona[];
   gruppi: Gruppo[];
+  annoAttivo?: Anno;
+  anni?: Anno[];
+  onSelectAnno?: (annoId: number) => void;
   initialFilter?: string;
   onOpenPagamento: (tesseratoId: number, quotaId: number) => void;
   onAnnullaQuota?: (quota: Quota) => void;
   onNavigateToBilancio?: () => void;
   onSincronizzaQuote?: () => void;
+  onOpenIscrizioneGruppo?: () => void;
 }
 
 export const QuoteView: React.FC<Props> = ({
@@ -19,12 +23,30 @@ export const QuoteView: React.FC<Props> = ({
   tesserati,
   persone,
   gruppi,
+  annoAttivo,
+  anni,
+  onSelectAnno,
   initialFilter,
   onOpenPagamento,
   onAnnullaQuota,
   onNavigateToBilancio,
-  onSincronizzaQuote
+  onSincronizzaQuote,
+  onOpenIscrizioneGruppo
 }) => {
+  // Anno sportivo selezionato per la vista
+  const [selectedAnnoId, setSelectedAnnoId] = useState<number>(
+    annoAttivo?.id || (anni && anni.length > 0 ? anni[0].id : 1)
+  );
+
+  // Sincronizza se l'anno attivo globale cambia dall'esterno
+  useEffect(() => {
+    if (annoAttivo?.id) {
+      setSelectedAnnoId(annoAttivo.id);
+    }
+  }, [annoAttivo?.id]);
+
+  const currentAnno = (anni && anni.find((a) => a.id === selectedAnnoId)) || annoAttivo;
+
   // Modalità di visualizzazione: 'previsione' (Riepilogo e Scadenziario Mensile) o 'tabella' (Elenco Singole Quote)
   const isMonthInitial = initialFilter && initialFilter.startsWith('20');
   const [vistaModalita, setVistaModalita] = useState<'previsione' | 'tabella'>(
@@ -51,23 +73,27 @@ export const QuoteView: React.FC<Props> = ({
     return `${mesiNomi[idx] || month} ${year}`;
   };
 
-  // Mesi disponibili calcolati dalle quote
-  const mesiDisponibili = Array.from(
-    new Set(
-      quote
-        .map((q) => q.mese_riferimento || q.data_scadenza.substring(0, 7))
-        .filter(Boolean)
-    )
-  ).sort();
+  // Filtra quote per l'anno sportivo di lavoro (evita di mostrare quote 2024 in anni futuri come 2026/2027)
+  const quoteStagione = quote.filter((q) =>
+    isQuotaInAnnoSportivo(q, currentAnno, tesserati, gruppi)
+  );
 
-  // Quote Scadute
-  const quoteScaduteCount = quote.filter(isQuotaScaduta).length;
-  const totaleScaduto = quote
+  // Mesi disponibili calcolati dall'intervallo dell'anno sportivo attivo (es. 2026-09 -> 2027-08)
+  // integrati con eventuali mesi presenti nelle quote di questo anno
+  const mesiDallAnno = getMesiAnnoSportivo(currentAnno);
+  const mesiDalleQuote = quoteStagione
+    .map((q) => q.mese_riferimento || q.data_scadenza.substring(0, 7))
+    .filter(Boolean);
+  const mesiDisponibili = Array.from(new Set([...mesiDallAnno, ...mesiDalleQuote])).sort();
+
+  // Quote Scadute per questo anno sportivo
+  const quoteScaduteCount = quoteStagione.filter(isQuotaScaduta).length;
+  const totaleScaduto = quoteStagione
     .filter(isQuotaScaduta)
     .reduce((acc, q) => acc + (q.importo - (q.importo_pagato || 0)), 0);
 
-  // Totali Generali Annuali
-  const quoteValide = quote.filter((q) => q.stato !== 'annullata');
+  // Totali Generali Annuali per l'anno sportivo selezionato
+  const quoteValide = quoteStagione.filter((q) => q.stato !== 'annullata');
   const totaleValoreQuoteStagione = quoteValide.reduce((sum, q) => sum + q.importo, 0);
   const totaleIncassatoStagione = quoteValide.reduce((sum, q) => sum + (q.importo_pagato || 0), 0);
   const totaleResiduoStagione = totaleValoreQuoteStagione - totaleIncassatoStagione;
@@ -77,7 +103,7 @@ export const QuoteView: React.FC<Props> = ({
 
   // Riepilogo Mese per Mese
   const riepilogoPerMese = mesiDisponibili.map((m) => {
-    const quoteDelMese = quote.filter(
+    const quoteDelMese = quoteStagione.filter(
       (q) => (q.mese_riferimento || q.data_scadenza.substring(0, 7)) === m && q.stato !== 'annullata'
     );
     const totalePrevisto = quoteDelMese.reduce((sum, q) => sum + q.importo, 0);
@@ -117,7 +143,7 @@ export const QuoteView: React.FC<Props> = ({
   });
 
   // Filtraggio Tabella
-  const filtered = quote.filter((q) => {
+  const filtered = quoteStagione.filter((q) => {
     const isScaduta = isQuotaScaduta(q);
 
     if (soloScadute && !isScaduta) return false;
@@ -182,6 +208,31 @@ export const QuoteView: React.FC<Props> = ({
         </div>
 
         <div className="d-flex align-items-center gap-2 flex-wrap">
+          {/* Selettore Anno Sportivo */}
+          {anni && anni.length > 0 && (
+            <div className="d-flex align-items-center gap-2 bg-white px-3 py-1 rounded-3 border shadow-sm">
+              <i className="bi bi-calendar-range-fill text-primary"></i>
+              <label htmlFor="select-anno-quote" className="small fw-bold text-dark mb-0">Stagione:</label>
+              <select
+                id="select-anno-quote"
+                className="form-select form-select-sm fw-bold border-0 bg-transparent py-1 pe-4"
+                style={{ width: 'auto', cursor: 'pointer' }}
+                value={currentAnno?.id}
+                onChange={(e) => {
+                  const id = Number(e.target.value);
+                  setSelectedAnnoId(id);
+                  if (onSelectAnno) onSelectAnno(id);
+                }}
+              >
+                {anni.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.anno} {a.attivo ? '⭐ Attiva' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {onSincronizzaQuote && (
             <button
               className="btn btn-sm btn-outline-secondary"
@@ -389,6 +440,28 @@ export const QuoteView: React.FC<Props> = ({
       {/* ========================================================================= */}
       {vistaModalita === 'previsione' && (
         <div>
+          {/* Banner esplicativo se nessuna quota è registrata per l'anno sportivo */}
+          {quoteStagione.length === 0 && (
+            <div className="alert alert-info border-info-subtle bg-info-subtle d-flex justify-content-between align-items-center p-3 rounded-4 mb-4">
+              <div className="d-flex align-items-center">
+                <i className="bi bi-calendar-check-fill fs-2 text-primary me-3"></i>
+                <div>
+                  <h6 className="alert-heading fw-bold mb-1">
+                    Stagione {currentAnno?.anno || 'Selezionata'} (dal {currentAnno?.data_inizio ? new Date(currentAnno.data_inizio).toLocaleDateString('it-IT') : ''} al {currentAnno?.data_fine ? new Date(currentAnno.data_fine).toLocaleDateString('it-IT') : ''})
+                  </h6>
+                  <p className="mb-0 small text-secondary">
+                    Non ci sono ancora quote registrate per questa stagione sportiva. Il quadro mensile sottostante mostra correttamente le <strong>{mesiDisponibili.length} mensilità a € 0,00</strong> in attesa delle iscrizioni ai corsi.
+                  </p>
+                </div>
+              </div>
+              {onSincronizzaQuote && (
+                <button className="btn btn-sm btn-primary fw-bold text-nowrap ms-3" onClick={onSincronizzaQuote}>
+                  <i className="bi bi-arrow-repeat me-1"></i> Calcola Quote
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="d-flex justify-content-between align-items-center mb-3">
             <div>
               <h5 className="fw-bold text-dark mb-0 d-flex align-items-center">
@@ -403,14 +476,21 @@ export const QuoteView: React.FC<Props> = ({
 
           <div className="row g-3 mb-4">
             {riepilogoPerMese.map((rm) => {
-              const isCompletato = rm.totalePrevisto > 0 && rm.totaleResiduo <= 0;
+              const isZero = rm.totaleQuote === 0;
+              const isCompletato = !isZero && rm.totalePrevisto > 0 && rm.totaleResiduo <= 0;
               const hasScadute = rm.quoteScaduteCount > 0;
 
               return (
                 <div key={rm.mese} className="col-12 col-md-6 col-lg-4 col-xl-3">
                   <div
                     className={`card border-0 shadow-sm rounded-4 h-100 bg-white transition-all ${
-                      hasScadute ? 'border-top border-danger border-4' : isCompletato ? 'border-top border-success border-4' : 'border-top border-primary border-4'
+                      hasScadute
+                        ? 'border-top border-danger border-4'
+                        : isCompletato
+                        ? 'border-top border-success border-4'
+                        : isZero
+                        ? 'border-top border-secondary-subtle border-3'
+                        : 'border-top border-primary border-4'
                     }`}
                   >
                     <div className="card-body p-3 d-flex flex-column justify-content-between">
@@ -421,7 +501,11 @@ export const QuoteView: React.FC<Props> = ({
                             <h5 className="fw-bold mb-0 text-dark">{rm.label}</h5>
                             <span className="small text-muted font-monospace">{rm.mese}</span>
                           </div>
-                          {isCompletato ? (
+                          {isZero ? (
+                            <span className="badge bg-light text-muted border">
+                              0 rate
+                            </span>
+                          ) : isCompletato ? (
                             <span className="badge bg-success-subtle text-success border border-success-subtle">
                               <i className="bi bi-check-circle-fill me-1"></i> Saldato
                             </span>
@@ -495,10 +579,10 @@ export const QuoteView: React.FC<Props> = ({
 
                       {/* Bottone azione per aprire le quote del mese */}
                       <button
-                        className="btn btn-sm btn-outline-primary w-100 mt-2 fw-semibold"
+                        className={`btn btn-sm ${isZero ? 'btn-outline-secondary' : 'btn-outline-primary'} w-100 mt-2 fw-semibold`}
                         onClick={() => handleSelezionaMesePerTabella(rm.mese)}
                       >
-                        <i className="bi bi-search me-1"></i> Gestisci Quote di {rm.label.split(' ')[0]} &rarr;
+                        <i className="bi bi-search me-1"></i> {isZero ? `Vedi Mese (${rm.label.split(' ')[0]})` : `Gestisci Quote di ${rm.label.split(' ')[0]} →`}
                       </button>
                     </div>
                   </div>
@@ -636,7 +720,22 @@ export const QuoteView: React.FC<Props> = ({
                   {paginated.length === 0 ? (
                     <tr>
                       <td colSpan={9} className="text-center py-5 text-muted">
-                        Nessuna quota trovata con i filtri selezionati.
+                        <i className="bi bi-inbox fs-2 d-block mb-2 text-secondary"></i>
+                        {quoteStagione.length === 0 ? (
+                          <div>
+                            <strong>Nessuna quota registrata per la stagione sportiva {currentAnno?.anno || ''}.</strong>
+                            <p className="small text-muted mt-1 mb-3">
+                              Iscrivi gli atleti ai corsi di questo anno sportivo per generare automaticamente le rate mensili previste.
+                            </p>
+                            {onOpenIscrizioneGruppo && (
+                              <button className="btn btn-sm btn-primary fw-semibold" onClick={onOpenIscrizioneGruppo}>
+                                <i className="bi bi-person-plus me-1"></i> Iscrivi Atleta a Gruppo
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          'Nessuna quota trovata con i filtri selezionati.'
+                        )}
                       </td>
                     </tr>
                   ) : (

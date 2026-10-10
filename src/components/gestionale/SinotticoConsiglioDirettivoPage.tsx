@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { Associazione, Anno, Quota, SpesaPrevisionale, Gruppo, CategoriaSpesa } from '../../types';
+import { getMesiAnnoSportivo, isQuotaInAnnoSportivo } from '../../utils/storage';
 
 interface Props {
   associazione: Associazione;
@@ -41,16 +42,20 @@ export const SinotticoConsiglioDirettivoPage: React.FC<Props> = ({
     return `${mesiNomi[idx] || month} ${year}`;
   };
 
-  // Mesi stagione
-  const tuttiMesi = [
-    '2024-09', '2024-10', '2024-11', '2024-12',
-    '2025-01', '2025-02', '2025-03', '2025-04', '2025-05', '2025-06'
-  ];
+  // Filtra quote per l'anno sportivo attivo
+  const quoteStagione = quote.filter((q) => isQuotaInAnnoSportivo(q, annoAttivo, [], gruppi));
+
+  // Mesi stagione dinamici
+  const mesiDallAnno = getMesiAnnoSportivo(annoAttivo);
+  const mesiDalleQuote = quoteStagione
+    .map((q) => q.mese_riferimento || q.data_scadenza.substring(0, 7))
+    .filter(Boolean);
+  const tuttiMesi = Array.from(new Set([...mesiDallAnno, ...mesiDalleQuote])).sort();
 
   // Calcolo piano finanziario mese per mese
   let progressivoCassa = 0;
   const pianoMesi = tuttiMesi.map((m) => {
-    const quoteMese = quote.filter(
+    const quoteMese = quoteStagione.filter(
       (q) => (q.mese_riferimento || q.data_scadenza.substring(0, 7)) === m && q.stato !== 'annullata'
     );
     const entrateMese = quoteMese.reduce((sum, q) => sum + q.importo, 0);
