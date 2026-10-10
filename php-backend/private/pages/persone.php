@@ -240,35 +240,35 @@ $err = $_GET['err'] ?? '';
                         </div>
 
                         <!-- MODAL PRIVACY & GDPR PER QUESTA PERSONA -->
-                        <div class="modal fade text-start" id="modalPrivacy<?= $p['id'] ?>" tabindex="-1" aria-hidden="true">
-                            <div class="modal-dialog modal-dialog-centered modal-lg">
-                                <div class="modal-content border-0 rounded-4 shadow-lg overflow-hidden">
+                        <div class="modal fade text-start" id="modalPrivacy<?= $p['id'] ?>" tabindex="-1" aria-hidden="true" style="white-space: normal !important;">
+                            <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable" style="white-space: normal !important;">
+                                <div class="modal-content border-0 rounded-4 shadow-lg overflow-hidden" style="white-space: normal !important; word-break: break-word; overflow-wrap: break-word;">
                                     <div class="modal-header bg-dark text-white p-3 border-bottom border-secondary d-flex justify-content-between align-items-center">
-                                        <div class="d-flex align-items-center gap-2">
-                                            <i class="bi bi-shield-lock-fill text-warning fs-4"></i>
-                                            <div>
-                                                <h5 class="modal-title fw-bold mb-0">Gestione Privacy, Eliminazione & GDPR</h5>
-                                                <small class="text-secondary">Diritto all'Oblio (Art. 17 GDPR) e vincoli di conservazione contabile (Art. 2220 C.C.)</small>
+                                        <div class="d-flex align-items-center gap-2 flex-grow-1 pe-2" style="min-width: 0;">
+                                            <i class="bi bi-shield-lock-fill text-warning fs-4 flex-shrink-0"></i>
+                                            <div class="flex-grow-1" style="min-width: 0;">
+                                                <h5 class="modal-title fw-bold mb-0 text-break" style="white-space: normal !important;">Gestione Privacy, Eliminazione & GDPR</h5>
+                                                <small class="text-secondary text-break d-block" style="white-space: normal !important;">Diritto all'Oblio (Art. 17 GDPR) e vincoli di conservazione contabile (Art. 2220 C.C.)</small>
                                             </div>
                                         </div>
-                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                        <button type="button" class="btn-close btn-close-white flex-shrink-0" data-bs-dismiss="modal"></button>
                                     </div>
 
                                     <div class="modal-body p-4 bg-light">
                                         <!-- Dati Soggetto -->
                                         <div class="card border-0 shadow-sm rounded-3 mb-3 bg-white p-3">
-                                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                                                <div>
+                                            <div class="d-flex justify-content-between align-items-start flex-column flex-sm-row gap-3">
+                                                <div class="flex-grow-1" style="min-width: 0; white-space: normal !important;">
                                                     <span class="badge bg-light text-dark border mb-1">ID Anagrafica #<?= $p['id'] ?></span>
-                                                    <h5 class="fw-bold mb-0 text-dark"><?= htmlspecialchars($p['cognome'] . ' ' . $p['nome']) ?></h5>
+                                                    <h5 class="fw-bold mb-1 text-dark text-break" style="white-space: normal !important;"><?= htmlspecialchars($p['cognome'] . ' ' . $p['nome']) ?></h5>
                                                     <div class="small text-muted font-monospace"><?= htmlspecialchars($p['codice_fiscale']) ?></div>
                                                     <?php if ($p['is_minorenne']): ?>
-                                                        <div class="small text-warning-emphasis fw-semibold mt-1">
+                                                        <div class="small text-warning-emphasis fw-semibold mt-1 text-break" style="white-space: normal !important;">
                                                             <i class="bi bi-shield-check me-1"></i>Minorenne • Tutore: <?= htmlspecialchars($p['tutore_cognome'] . ' ' . $p['tutore_nome']) ?> (<?= htmlspecialchars($p['tutore_relazione'] ?? 'Genitore') ?>)
                                                         </div>
                                                     <?php endif; ?>
                                                 </div>
-                                                <div class="text-end">
+                                                <div class="text-sm-end text-start flex-shrink-0">
                                                     <div class="small text-muted">Stato contabile:</div>
                                                     <div class="fw-bold text-dark"><?= $pagData['count'] ?> ricevute emesse</div>
                                                     <div class="small fw-semibold text-success">Totale: € <?= number_format($pagData['totale'], 2, ',', '.') ?></div>
@@ -280,7 +280,7 @@ $err = $_GET['err'] ?? '';
                                         <?php if ($hasReceipts): ?>
                                             <div class="alert alert-warning border-warning shadow-sm rounded-3 mb-3 p-3 d-flex align-items-start gap-2">
                                                 <i class="bi bi-exclamation-triangle-fill fs-4 text-warning flex-shrink-0 mt-1"></i>
-                                                <div class="small">
+                                                <div class="small flex-grow-1 text-break" style="min-width: 0; white-space: normal !important; line-height: 1.5;">
                                                     <strong class="d-block text-dark fw-bold mb-1">Vincolo di Conservazione Fiscale Decennale (Art. 2220 C.C. & DPR 600/73)</strong>
                                                     Per questa persona risultano registrati <strong><?= $pagData['count'] ?> pagamenti contabili</strong> per un totale di <strong>€ <?= number_format($pagData['totale'], 2, ',', '.') ?></strong>. La legge fiscale impone la conservazione obbligatoria per 10 anni. Per ottemperare alla richiesta di cancellazione dati dell'interessato (Art. 17 GDPR), si deve procedere con l'<strong>Anonimizzazione GDPR</strong>.
                                                 </div>
@@ -288,7 +288,7 @@ $err = $_GET['err'] ?? '';
                                         <?php else: ?>
                                             <div class="alert alert-info border-info shadow-sm rounded-3 mb-3 p-3 d-flex align-items-start gap-2">
                                                 <i class="bi bi-info-circle-fill fs-4 text-info flex-shrink-0 mt-1"></i>
-                                                <div class="small">
+                                                <div class="small flex-grow-1 text-break" style="min-width: 0; white-space: normal !important; line-height: 1.5;">
                                                     <strong class="d-block text-dark fw-bold mb-1">Nessuna Ricevuta Contabile Emessa</strong>
                                                     Per questo nominativo non risultano pagamenti registrati. È possibile procedere sia con l'archiviazione che con l'<strong>eliminazione fisica definitiva</strong>.
                                                 </div>
@@ -300,22 +300,24 @@ $err = $_GET['err'] ?? '';
                                             <!-- Opzione 1: Archiviazione / Ripristino -->
                                             <div class="col-12">
                                                 <div class="card border rounded-3 p-3 bg-white">
-                                                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                                        <div>
-                                                            <h6 class="fw-bold mb-0 text-dark">
+                                                    <div class="d-flex justify-content-between align-items-sm-center align-items-start flex-column flex-sm-row gap-3">
+                                                        <div class="flex-grow-1" style="min-width: 0; white-space: normal !important;">
+                                                            <h6 class="fw-bold mb-1 text-dark text-break" style="white-space: normal !important;">
                                                                 <?= $isArchived ? '1. Ripristina Anagrafica tra i Soci Attivi' : '1. Nascondi / Archivia Anagrafica (Soft Delete)' ?>
                                                             </h6>
-                                                            <small class="text-muted">
+                                                            <p class="small text-muted mb-0 text-break" style="white-space: normal !important; line-height: 1.45;">
                                                                 <?= $isArchived ? 'Riporta la persona e il tutore tra le anagrafiche attive e operabili.' : 'Nasconde la persona dalle liste ordinarie, dai corsi e dal Kiosk, mantenendo intatti storico e ricevute.' ?>
-                                                            </small>
+                                                            </p>
                                                         </div>
-                                                        <form method="POST" action="index.php?action=elimina_persona">
-                                                            <input type="hidden" name="id" value="<?= $p['id'] ?>">
-                                                            <input type="hidden" name="action_mode" value="<?= $isArchived ? 'ripristina' : 'archivia' ?>">
-                                                            <button type="submit" class="btn btn-sm <?= $isArchived ? 'btn-outline-primary' : 'btn-outline-secondary' ?> fw-semibold">
-                                                                <?= $isArchived ? 'Ripristina' : 'Archivia / Nascondi' ?>
-                                                            </button>
-                                                        </form>
+                                                        <div class="flex-shrink-0 ms-sm-auto align-self-sm-center align-self-stretch text-end">
+                                                            <form method="POST" action="index.php?action=elimina_persona" class="m-0">
+                                                                <input type="hidden" name="id" value="<?= $p['id'] ?>">
+                                                                <input type="hidden" name="action_mode" value="<?= $isArchived ? 'ripristina' : 'archivia' ?>">
+                                                                <button type="submit" class="btn btn-sm <?= $isArchived ? 'btn-outline-primary' : 'btn-outline-secondary' ?> fw-semibold">
+                                                                    <?= $isArchived ? 'Ripristina' : 'Archivia / Nascondi' ?>
+                                                                </button>
+                                                            </form>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -323,27 +325,29 @@ $err = $_GET['err'] ?? '';
                                             <!-- Opzione 2: Anonimizzazione GDPR -->
                                             <div class="col-12">
                                                 <div class="card border rounded-3 p-3 bg-white">
-                                                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                                        <div>
-                                                            <div class="d-flex align-items-center gap-2">
-                                                                <h6 class="fw-bold mb-0 text-dark">2. Anonimizzazione GDPR (Art. 17 Diritto all'Oblio)</h6>
+                                                    <div class="d-flex justify-content-between align-items-sm-center align-items-start flex-column flex-sm-row gap-3">
+                                                        <div class="flex-grow-1" style="min-width: 0; white-space: normal !important;">
+                                                            <div class="d-flex align-items-center flex-wrap gap-2 mb-1">
+                                                                <h6 class="fw-bold mb-0 text-dark text-break" style="white-space: normal !important;">2. Anonimizzazione GDPR (Art. 17 Diritto all'Oblio)</h6>
                                                                 <span class="badge bg-warning text-dark small">Consigliato GDPR</span>
                                                             </div>
-                                                            <small class="text-muted">
+                                                            <p class="small text-muted mb-0 text-break" style="white-space: normal !important; line-height: 1.45;">
                                                                 Cancella definitivamente Nome, Cognome, Telefono, Email, Indirizzo e <strong>TUTTI i dati del Tutore</strong>. Mantiene i numeri di ricevuta intestati ad "ANONIMO" per conformità decennale ex art. 2220 C.C.
-                                                            </small>
+                                                            </p>
                                                         </div>
-                                                        <?php if ($isGdpr): ?>
-                                                            <span class="badge bg-success py-2 px-3"><i class="bi bi-check2-circle me-1"></i>Già Anonimizzato</span>
-                                                        <?php else: ?>
-                                                            <form method="POST" action="index.php?action=elimina_persona" onsubmit="return confirm('Confermi l\'anonimizzazione irreversibile dei dati personali e del tutore a norma GDPR (Art. 17)?');">
-                                                                <input type="hidden" name="id" value="<?= $p['id'] ?>">
-                                                                <input type="hidden" name="action_mode" value="anonimizza_gdpr">
-                                                                <button type="submit" class="btn btn-sm btn-outline-warning text-dark fw-bold">
-                                                                    Anonimizza Dati GDPR
-                                                                </button>
-                                                            </form>
-                                                        <?php endif; ?>
+                                                        <div class="flex-shrink-0 ms-sm-auto align-self-sm-center align-self-stretch text-end">
+                                                            <?php if ($isGdpr): ?>
+                                                                <span class="badge bg-success py-2 px-3"><i class="bi bi-check2-circle me-1"></i>Già Anonimizzato</span>
+                                                            <?php else: ?>
+                                                                <form method="POST" action="index.php?action=elimina_persona" onsubmit="return confirm('Confermi l\'anonimizzazione irreversibile dei dati personali e del tutore a norma GDPR (Art. 17)?');" class="m-0">
+                                                                    <input type="hidden" name="id" value="<?= $p['id'] ?>">
+                                                                    <input type="hidden" name="action_mode" value="anonimizza_gdpr">
+                                                                    <button type="submit" class="btn btn-sm btn-outline-warning text-dark fw-bold">
+                                                                        Anonimizza Dati GDPR
+                                                                    </button>
+                                                                </form>
+                                                            <?php endif; ?>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -351,35 +355,42 @@ $err = $_GET['err'] ?? '';
                                             <!-- Opzione 3: Eliminazione Definitiva -->
                                             <div class="col-12">
                                                 <div class="card border rounded-3 p-3 bg-white">
-                                                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                                        <div>
-                                                            <h6 class="fw-bold mb-0 <?= $hasReceipts ? 'text-muted' : 'text-danger' ?>">
-                                                                3. Eliminazione Fisica Definitiva (Hard Delete)
-                                                            </h6>
-                                                            <small class="text-muted">
-                                                                <?= $hasReceipts ? 'Non consentita per legge: documenti contabili obbligatori per 10 anni (utilizza l\'Anonimizzazione).' : 'Cancella fisicamente l\'anagrafica dal database. Possibile perché non risultano ricevute di cassa.' ?>
-                                                            </small>
+                                                    <div class="d-flex justify-content-between align-items-sm-center align-items-start flex-column flex-sm-row gap-3">
+                                                        <div class="flex-grow-1" style="min-width: 0; white-space: normal !important;">
+                                                            <div class="d-flex align-items-center flex-wrap gap-2 mb-1">
+                                                                <h6 class="fw-bold mb-0 text-break <?= $hasReceipts ? 'text-muted' : 'text-danger' ?>" style="white-space: normal !important;">
+                                                                    3. Eliminazione Fisica Definitiva (Hard Delete)
+                                                                </h6>
+                                                                <?php if ($hasReceipts): ?>
+                                                                    <span class="badge bg-danger small">Non consentita per legge</span>
+                                                                <?php endif; ?>
+                                                            </div>
+                                                            <p class="small text-muted mb-0 text-break" style="white-space: normal !important; line-height: 1.45;">
+                                                                <?= $hasReceipts ? 'Non consentita per legge: documenti contabili obbligatori per 10 anni (utilizza l\'Anonimizzazione sopra).' : 'Cancella fisicamente l\'anagrafica dal database. Possibile perché non risultano ricevute di cassa.' ?>
+                                                            </p>
                                                         </div>
-                                                        <?php if ($hasReceipts): ?>
-                                                            <button class="btn btn-sm btn-light border text-muted" disabled>Non Consentito</button>
-                                                        <?php else: ?>
-                                                            <form method="POST" action="index.php?action=elimina_persona" onsubmit="return confirm('Sei sicuro di voler eliminare DEFINITIVAMENTE questa persona dal database? L\'operazione non è reversibile.');">
-                                                                <input type="hidden" name="id" value="<?= $p['id'] ?>">
-                                                                <input type="hidden" name="action_mode" value="elimina_definitivo">
-                                                                <button type="submit" class="btn btn-sm btn-outline-danger fw-bold">
-                                                                    Elimina Definitivo
-                                                                </button>
-                                                            </form>
-                                                        <?php endif; ?>
+                                                        <div class="flex-shrink-0 ms-sm-auto align-self-sm-center align-self-stretch text-end">
+                                                            <?php if ($hasReceipts): ?>
+                                                                <button class="btn btn-sm btn-light border text-muted" disabled>Non Consentito</button>
+                                                            <?php else: ?>
+                                                                <form method="POST" action="index.php?action=elimina_persona" onsubmit="return confirm('Sei sicuro di voler eliminare DEFINITIVAMENTE questa persona dal database? L\'operazione non è reversibile.');" class="m-0">
+                                                                    <input type="hidden" name="id" value="<?= $p['id'] ?>">
+                                                                    <input type="hidden" name="action_mode" value="elimina_definitivo">
+                                                                    <button type="submit" class="btn btn-sm btn-outline-danger fw-bold">
+                                                                        Elimina Definitivo
+                                                                    </button>
+                                                                </form>
+                                                            <?php endif; ?>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div class="modal-footer bg-white border-top p-3 d-flex justify-content-between align-items-center">
-                                        <span class="small text-muted"><i class="bi bi-shield-check me-1 text-success"></i> Conforme GDPR e Codice Civile Italiano</span>
-                                        <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Chiudi</button>
+                                    <div class="modal-footer bg-white border-top p-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                        <span class="small text-muted text-break flex-grow-1" style="min-width: 0; white-space: normal !important;"><i class="bi bi-shield-check me-1 text-success"></i> Conforme GDPR e Codice Civile Italiano</span>
+                                        <button type="button" class="btn btn-secondary btn-sm px-3 flex-shrink-0" data-bs-dismiss="modal">Chiudi</button>
                                     </div>
                                 </div>
                             </div>
